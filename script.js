@@ -1,38 +1,36 @@
 /**
- * 终极重构版：
- * 1. VisualViewport 动态高度适配 (彻底杜绝键盘挤压)
- * 2. Canvas 像素级色度键抠像 (物理级 100% 透明去白底)
- * 3. 严格寻轨锁与防连击 (100% 触发且无拖尾)
+ * Spider-Man Chat 终极稳定版控制器
+ * - 解决 iOS 异步权限拦截导致的无画面问题
+ * - 解决白底遮挡与软键盘挤压变形
  */
 (function () {
   'use strict';
 
-  // 【核心机制1】监听 VisualViewport，动态修正视口高度，废除 100vh 的隐患
-  function adjustViewport() {
-    const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-    document.documentElement.style.setProperty('--app-height', `${vh}px`);
-    window.scrollTo(0, 0);
+  // 1. 动态视口高度适配 (键盘弹起自动调整)
+  function syncViewport() {
+    const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    document.documentElement.style.setProperty('--viewport-height', `${height}px`);
   }
-  window.addEventListener('resize', adjustViewport);
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', adjustViewport);
-  }
-  adjustViewport();
 
-  // 精确切片：露头起播 -> 离屏截断
+  window.addEventListener('resize', syncViewport);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', syncViewport);
+    window.visualViewport.addEventListener('scroll', syncViewport);
+  }
+  syncViewport();
+
+  // 2. 精准片段定义：人物露头起播 -> 人物完全离屏退场立即切断
   const CLIPS = [
-    { id: 0, start: 0.05, end: 2.80 }, 
-    { id: 1, start: 3.55, end: 6.30 }, 
-    { id: 2, start: 7.15, end: 9.95 }
+    { id: 0, start: 0.05, end: 2.85 },  // 第 1 款：正上方倒挂滑落 -> 向上收回
+    { id: 1, start: 3.50, end: 6.30 },  // 第 2 款：顶部晃荡穿梭 -> 飞出屏幕
+    { id: 2, start: 7.10, end: 9.90 }   // 第 3 款：近距离俯冲 -> 弹回上方
   ];
 
-  let chatFlow, msgInput, chatForm, sendBtn;
-  let spiderOverlay, spiderVideo, spiderCanvas, ctx;
-  
-  let activeEffectId = 0;
+  let chatFlow, msgInput, chatForm, sendBtn, spiderOverlay, spiderVideo;
+  let activeSessionId = 0;
   let lastClipIndex = -1;
   let repeatCount = 0;
-  let isSending = false;
+  let isThrottled = false;
 
   function initElements() {
     chatFlow = document.getElementById('chatFlow');
@@ -41,123 +39,101 @@
     sendBtn = document.getElementById('sendBtn');
     spiderOverlay = document.getElementById('spiderOverlay');
     spiderVideo = document.getElementById('spiderVideo');
-    spiderCanvas = document.getElementById('spiderCanvas');
-    if (spiderCanvas) {
-      // willReadFrequently 提升像素级操作性能
-      ctx = spiderCanvas.getContext('2d', { willReadFrequently: true }); 
-    }
   }
 
+  // 随机抽取 (防连抽相同特效)
   function getNextClip() {
     const all = [0, 1, 2];
     let pool = all;
-    if (repeatCount >= 2) pool = all.filter(i => i !== lastClipIndex);
+    if (repeatCount >= 2) {
+      pool = all.filter(i => i !== lastClipIndex);
+    }
     const idx = pool[Math.floor(Math.random() * pool.length)];
-    if (idx === lastClipIndex) repeatCount++;
-    else { lastClipIndex = idx; repeatCount = 1; }
+    if (idx === lastClipIndex) {
+      repeatCount++;
+    } else {
+      lastClipIndex = idx;
+      repeatCount = 1;
+    }
     return CLIPS[idx];
   }
 
-  // 瞬间停止特效并清空画布
-  function stopSpiderEffect(effectId) {
-    if (effectId && effectId !== activeEffectId) return;
+  // 停止特效并隐藏
+  function stopSpiderEffect(sessionId) {
+    if (sessionId && sessionId !== activeSessionId) return;
     if (spiderVideo) spiderVideo.pause();
     if (spiderOverlay) spiderOverlay.classList.remove('active');
-    if (ctx && spiderCanvas) ctx.clearRect(0, 0, spiderCanvas.width, spiderCanvas.height);
   }
 
-  // 【核心机制2】播放与物理抠像渲染
+  // 核心特效播放逻辑 (同步直拉启动，确保 100% 展现画面)
   function playSpiderEffect() {
-    if (!spiderVideo || !spiderOverlay || !ctx) return;
+    if (!spiderVideo || !spiderOverlay) return;
 
-    const currentId = ++activeEffectId;
+    const currentSession = ++activeSessionId;
     const clip = getNextClip();
-    
+    const startTime = clip.start;
+    const endTime = clip.end;
+    const duration = endTime - startTime;
+    const startTimestamp = performance.now();
+
+    // 1. 同步设置指针与状态
+    spiderVideo.currentTime = startTime;
+    spiderVideo.muted = false;
+    spiderVideo.volume = 1.0;
     spiderOverlay.classList.add('active');
 
-    try {
-      spiderVideo.currentTime = clip.start;
-      spiderVideo.muted = false;
-      spiderVideo.volume = 1.0;
-    } catch (e) {}
-
+    // 2. 主线程同步拉起 play()，保留 iOS 最高手势权限
     const promise = spiderVideo.play();
     if (promise !== undefined) {
       promise.catch(() => {
-        spiderVideo.muted = true; 
+        spiderVideo.muted = true; // 降级静音秒起
         spiderVideo.play();
       });
     }
 
-    let hasSuccessfullyStarted = false;
+    let seekConfirmed = false;
 
-    // 逐帧抠图循环
-    function renderFrame() {
-      if (currentId !== activeEffectId) return;
+    // 3. 高精帧循环检测 (防异步寻轨误判)
+    function monitorLoop() {
+      if (currentSession !== activeSessionId) return;
 
-      const cur = spiderVideo.currentTime;
+      const curTime = spiderVideo.currentTime;
+      const elapsed = (performance.now() - startTimestamp) / 1000;
 
-      if (!hasSuccessfullyStarted && Math.abs(cur - clip.start) < 0.5) {
-        hasSuccessfullyStarted = true;
-      }
-
-      // 如果视频已就绪，进行像素级物理去背
-      if (hasSuccessfullyStarted && spiderVideo.videoWidth > 0) {
-        // 降低渲染分辨率以保性能 (控制在 400px 宽度内)
-        const targetWidth = Math.min(400, spiderVideo.videoWidth);
-        const scale = targetWidth / spiderVideo.videoWidth;
-        const targetHeight = spiderVideo.videoHeight * scale;
-
-        if (spiderCanvas.width !== targetWidth) {
-          spiderCanvas.width = targetWidth;
-          spiderCanvas.height = targetHeight;
+      // 确认时间指针已成功跳至当前片段附近
+      if (!seekConfirmed) {
+        if (Math.abs(curTime - startTime) < 0.6 || elapsed > 0.15) {
+          seekConfirmed = true;
         }
+      }
 
-        ctx.drawImage(spiderVideo, 0, 0, targetWidth, targetHeight);
-        
-        // 像素级扫描：将白色背景彻底变为透明
-        const frameData = ctx.getImageData(0, 0, targetWidth, targetHeight);
-        const data = frameData.data;
-        const len = data.length;
-
-        for (let i = 0; i < len; i += 4) {
-          const r = data[i], g = data[i+1], b = data[i+2];
-          // 只要 RGB 均大于 220，即判定为背景白块
-          if (r > 220 && g > 220 && b > 220) {
-            const minColor = Math.min(r, g, b);
-            if (minColor > 240) {
-              data[i+3] = 0; // 纯白或伪白完全透明
-            } else {
-              // 边缘抗锯齿平滑过渡
-              data[i+3] = Math.floor((240 - minColor) * 12); 
-            }
-          }
+      // 仅在确认进入片段后，到达结束点或达到动作时长瞬间关闭
+      if (seekConfirmed) {
+        if (curTime >= endTime || elapsed >= duration + 0.3) {
+          stopSpiderEffect(currentSession);
+          return;
         }
-        ctx.putImageData(frameData, 0, 0);
       }
 
-      if (hasSuccessfullyStarted && cur >= clip.end) {
-        stopSpiderEffect(currentId);
-        return;
-      }
-
-      requestAnimationFrame(renderFrame);
+      requestAnimationFrame(monitorLoop);
     }
 
-    requestAnimationFrame(renderFrame);
+    requestAnimationFrame(monitorLoop);
   }
 
-  // 消息发送核心器
+  // 消息发送核心
   function handleSend() {
-    if (isSending) return; 
-    isSending = true;
+    if (isThrottled) return;
+    isThrottled = true;
+    setTimeout(() => { isThrottled = false; }, 80);
 
     if (!msgInput || !chatFlow) initElements();
-    if (!msgInput) { isSending = false; return; }
+    if (!msgInput) return;
 
     const text = msgInput.value.trim();
-    if (!text) { isSending = false; return; }
+    if (!text) return;
 
+    // 1. 上屏渲染气泡
     try {
       const row = document.createElement('div');
       row.className = 'msg-row';
@@ -169,19 +145,17 @@
 
       msgInput.value = '';
       chatFlow.scrollTop = chatFlow.scrollHeight;
-    } catch (err) {}
+    } catch (err) {
+      console.error(err);
+    }
 
-    // 匹配 mj
+    // 2. 匹配 mj / MJ / Mj / mJ
     if (text.toLowerCase().includes('mj')) {
       playSpiderEffect();
     }
-
-    setTimeout(() => { isSending = false; }, 100);
   }
 
-  // 事件挂载
-  window.triggerChatSend = handleSend;
-
+  // 全局事件监听
   function setup() {
     initElements();
 
