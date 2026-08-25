@@ -10,7 +10,7 @@
 <body>
 
   <main class="chat-container" id="chatContainer">
-    <!-- 蜘蛛侠原版特效视频图层 (调用本地 spider.mp4) -->
+    <!-- 蜘蛛侠原版特效图层 (顶部触发) -->
     <div class="spiderman-overlay" id="spiderOverlay" aria-hidden="true">
       <video 
         id="spiderVideo" 
@@ -19,14 +19,16 @@
         webkit-playsinline
         x5-playsinline
         preload="auto"
-        src="spider.mp4"
-      ></video>
+      >
+        <source src="spider.mp4" type="video/mp4">
+        <source src="293_raw.mov" type="video/quicktime">
+      </video>
     </div>
 
     <!-- 消息流区域 -->
     <section class="chat-flow" id="chatFlow" aria-live="polite"></section>
 
-    <!-- 底部极简输入栏 -->
+    <!-- 底部输入栏 -->
     <form class="chat-bar" id="chatForm" onsubmit="return false;">
       <div class="input-container">
         <input 
