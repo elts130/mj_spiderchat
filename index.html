@@ -5,17 +5,12 @@
 
   <meta
     name="viewport"
-    content="width=device-width,
-             initial-scale=1,
-             viewport-fit=cover,
-             user-scalable=no,
-             interactive-widget=resizes-content"
+    content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
   >
 
   <meta name="theme-color" content="#ffffff">
-  <meta name="apple-mobile-web-app-capable" content="yes">
 
-  <title>MJ Chat</title>
+  <title>MJ 私信彩蛋</title>
 
   <link rel="stylesheet" href="style.css">
 </head>
@@ -24,25 +19,25 @@
 
 <div class="app" id="app">
 
-  <!-- 顶部导航 -->
   <header class="topbar">
 
-    <div class="topbar-left">
+    <button
+      class="back"
+      type="button"
+      aria-label="返回"
+    >
+      ‹
+    </button>
 
-      <button
-        class="icon-btn back-btn"
-        type="button"
-        aria-label="返回"
-      >
-        ‹
-      </button>
+    <div class="profile">
 
       <div class="avatar">
         M
       </div>
 
-      <div class="chat-title">
+      <div class="profile-text">
         <strong>MJ</strong>
+
         <span>
           <i></i>
           在线
@@ -51,24 +46,19 @@
 
     </div>
 
-    <div class="topbar-actions">
-
-      <button
-        class="icon-btn"
-        id="soundBtn"
-        type="button"
-        aria-label="声音"
-      >
-        <span id="soundOn">🔊</span>
-        <span id="soundOff" class="hidden">🔇</span>
-      </button>
-
-    </div>
+    <button
+      class="icon-btn"
+      id="soundBtn"
+      type="button"
+      aria-label="切换声音"
+    >
+      <span id="soundOn">🔊</span>
+      <span id="soundOff" class="hidden">🔇</span>
+    </button>
 
   </header>
 
 
-  <!-- 聊天区域 -->
   <main
     class="chat"
     id="chatViewport"
@@ -80,54 +70,42 @@
       aria-live="polite"
     >
 
-      <div class="date-label">
+      <div class="day">
         今天
       </div>
 
-
-      <div class="message-row other">
-
-        <div class="message-bubble other-bubble">
-          哈喽～
+      <div class="row other">
+        <div class="bubble other-bubble">
+          你好呀～
         </div>
-
       </div>
 
-
-      <div class="message-row other">
-
-        <div class="message-bubble other-bubble">
-          在干嘛？
+      <div class="row other">
+        <div class="bubble other-bubble">
+          试试发 <b>MJ</b> 👀
         </div>
-
       </div>
-
 
     </div>
 
 
     <!--
-      MJ 彩蛋层
+      MJ 特效独立层
 
-      注意：
-
-      1. 不放进 messages
-      2. 不参与滚动
-      3. 不占用布局空间
-      4. 永远覆盖在聊天内容之上
-      5. 输入栏之下
+      不进入聊天消息 DOM
+      不参与滚动
+      不占聊天气泡空间
     -->
 
     <div
-      class="easter-egg"
-      id="easterEgg"
+      class="egg"
+      id="egg"
       aria-hidden="true"
     >
 
       <video
         id="eggVideo"
-        class="easter-egg-video"
-        muted
+        class="egg-video"
         playsinline
         webkit-playsinline
         preload="auto"
@@ -140,8 +118,6 @@
   </main>
 
 
-  <!-- 输入框 -->
-
   <form
     class="composer"
     id="composer"
@@ -149,7 +125,7 @@
   >
 
     <button
-      class="composer-extra"
+      class="plus"
       type="button"
       aria-label="更多"
     >
@@ -162,22 +138,21 @@
       type="text"
       inputmode="text"
       enterkeyhint="send"
+      maxlength="500"
       autocomplete="off"
       autocorrect="off"
-      autocapitalize="off"
       spellcheck="false"
-      maxlength="500"
       placeholder="发消息…"
     >
 
 
     <button
-      class="send-button"
-      id="sendButton"
+      class="send"
+      id="sendBtn"
       type="submit"
       aria-label="发送"
     >
-      ↑
+      ➤
     </button>
 
   </form>
@@ -188,6 +163,8 @@
 <div
   class="toast"
   id="toast"
+  role="status"
+  aria-live="polite"
 ></div>
 
 
