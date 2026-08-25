@@ -1,16 +1,14 @@
 /**
- * 抖音同款蜘蛛侠特效控制器 (Canvas 硬件级正片叠底 + 精确起止切片)
+ * 抖音同款蜘蛛侠特效控制器 (精准起止剪裁 + 零延迟必出)
  */
 const chatFlow = document.getElementById('chatFlow');
 const msgInput = document.getElementById('msgInput');
 const chatForm = document.getElementById('chatForm');
 const sendBtn = document.getElementById('sendBtn');
 const spiderOverlay = document.getElementById('spiderOverlay');
-const spiderCanvas = document.getElementById('spiderCanvas');
 const spiderVideo = document.getElementById('spiderVideo');
-const ctx = spiderCanvas.getContext('2d');
 
-// 精确起止时间戳：从人物在画面中露头开始，到人物完全缩回/飞出视野的瞬间立即切断
+// 严格精准片段：从人物在画面中露头开始 (start)，到人物完全缩回/离屏瞬间立即截断 (end)
 const clips = [
   { id: 0, start: 0.05, end: 2.85 },  // 第 1 款：正上方倒挂滑落 -> 缩回顶部
   { id: 1, start: 3.55, end: 6.35 },  // 第 2 款：顶部穿梭晃荡 -> 飞出屏幕
@@ -41,22 +39,21 @@ function getNextClip() {
   return clips[chosenIndex];
 }
 
-// 停止特效并立即清空画布
+// 停止特效
 function stopSpiderEffect(targetId) {
   if (targetId && targetId !== activeEffectId) return;
   spiderVideo.pause();
   spiderOverlay.classList.remove('active');
-  ctx.clearRect(0, 0, spiderCanvas.width, spiderCanvas.height);
 }
 
-// 触发特效 (Canvas 实时逐帧转绘 + 纯净正片叠底)
+// 触发特效
 function playSpiderEffect() {
   const thisEffectId = ++activeEffectId;
   const clip = getNextClip();
 
   const startTime = clip.start;
   const endTime = clip.end;
-  const maxAllowedDuration = (endTime - startTime) + 0.35;
+  const maxAllowedDuration = (endTime - startTime) + 0.3;
   const triggerTime = performance.now();
 
   spiderVideo.currentTime = startTime;
@@ -73,23 +70,12 @@ function playSpiderEffect() {
     });
   }
 
-  // 逐帧绘制循环
-  function renderLoop() {
+  function frameLoop() {
     if (thisEffectId !== activeEffectId) return;
-
-    // 同步 Canvas 尺寸并绘制当前帧
-    if (spiderVideo.videoWidth > 0) {
-      if (spiderCanvas.width !== spiderVideo.videoWidth) {
-        spiderCanvas.width = spiderVideo.videoWidth;
-        spiderCanvas.height = spiderVideo.videoHeight;
-      }
-      ctx.drawImage(spiderVideo, 0, 0, spiderCanvas.width, spiderCanvas.height);
-    }
 
     const cur = spiderVideo.currentTime;
     const elapsedSec = (performance.now() - triggerTime) / 1000;
 
-    // 精确判定：到达结束点或超时立即切断
     const inRange = (cur >= startTime - 0.1) && (cur <= endTime + 0.5);
     const reachedEnd = (cur >= endTime);
     const timeout = (elapsedSec >= maxAllowedDuration);
@@ -99,20 +85,19 @@ function playSpiderEffect() {
       return;
     }
 
-    requestAnimationFrame(renderLoop);
+    requestAnimationFrame(frameLoop);
   }
 
-  requestAnimationFrame(renderLoop);
+  requestAnimationFrame(frameLoop);
 }
 
 spiderVideo.addEventListener('ended', () => stopSpiderEffect());
 
-// 消息发送与触发处理
+// 消息发送核心逻辑
 function handleSend() {
   const text = msgInput.value.trim();
   if (!text) return;
 
-  // 1. 渲染发送气泡
   const row = document.createElement('div');
   row.className = 'msg-row';
   const bubble = document.createElement('div');
@@ -124,13 +109,12 @@ function handleSend() {
   msgInput.value = '';
   chatFlow.scrollTop = chatFlow.scrollHeight;
 
-  // 2. 大小写不敏感匹配 (mj / MJ / Mj / mJ)
+  // 大小写完全不敏感匹配 mj / MJ / Mj / mJ
   if (text.toLowerCase().includes('mj')) {
     playSpiderEffect();
   }
 }
 
-// 多重事件绑定
 sendBtn.addEventListener('click', (e) => {
   e.preventDefault();
   handleSend();
