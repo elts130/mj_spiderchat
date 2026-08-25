@@ -1,100 +1,117 @@
 <!doctype html>
 <html lang="zh-CN">
+
 <head>
+
   <meta charset="utf-8">
 
   <meta
     name="viewport"
-    content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"
   >
 
-  <meta name="theme-color" content="#ffffff">
+  <meta
+    name="theme-color"
+    content="#ffffff"
+  >
 
-  <title>MJ 私信彩蛋</title>
+  <title>MJ · 私信彩蛋</title>
 
-  <link rel="stylesheet" href="style.css">
+  <link
+    rel="stylesheet"
+    href="style.css"
+  >
+
 </head>
+
 
 <body>
 
-<div class="app" id="app">
+<div
+  class="app"
+  id="app"
+>
+
+
+  <!-- 顶部私信栏 -->
 
   <header class="topbar">
 
     <button
       class="back"
       type="button"
-      aria-label="返回"
     >
       ‹
     </button>
 
-    <div class="profile">
+
+    <div class="person">
 
       <div class="avatar">
         M
       </div>
 
-      <div class="profile-text">
-        <strong>MJ</strong>
 
-        <span>
+      <div class="person-info">
+
+        <div class="name">
+          MJ
+        </div>
+
+        <div class="status">
           <i></i>
           在线
-        </span>
+        </div>
+
       </div>
 
     </div>
 
+
     <button
-      class="icon-btn"
-      id="soundBtn"
+      class="more"
       type="button"
-      aria-label="切换声音"
     >
-      <span id="soundOn">🔊</span>
-      <span id="soundOff" class="hidden">🔇</span>
+      •••
     </button>
 
   </header>
 
 
+  <!-- 私信区域 -->
+
   <main
     class="chat"
-    id="chatViewport"
+    id="chat"
   >
 
     <div
       class="messages"
       id="messages"
-      aria-live="polite"
     >
 
-      <div class="day">
+      <div class="date">
         今天
       </div>
 
-      <div class="row other">
-        <div class="bubble other-bubble">
-          你好呀～
-        </div>
-      </div>
 
-      <div class="row other">
-        <div class="bubble other-bubble">
-          试试发 <b>MJ</b> 👀
-        </div>
+      <div class="hint">
+        发送 <b>MJ</b> 试试
       </div>
 
     </div>
 
 
     <!--
-      MJ 特效独立层
 
-      不进入聊天消息 DOM
-      不参与滚动
-      不占聊天气泡空间
+      蜘蛛侠彩蛋
+
+      不属于聊天内容。
+
+      不参与页面布局。
+
+      只是覆盖在聊天区域上面。
+
     -->
 
     <div
@@ -104,19 +121,20 @@
     >
 
       <video
-        id="eggVideo"
-        class="egg-video"
+        id="effect"
+        class="effect"
         playsinline
         webkit-playsinline
         preload="auto"
         disablepictureinpicture
-        controlslist="nodownload noplaybackrate noremoteplayback"
       ></video>
 
     </div>
 
   </main>
 
+
+  <!-- 输入区域 -->
 
   <form
     class="composer"
@@ -127,32 +145,28 @@
     <button
       class="plus"
       type="button"
-      aria-label="更多"
     >
       ＋
     </button>
 
 
     <input
-      id="messageInput"
+      id="input"
       type="text"
-      inputmode="text"
-      enterkeyhint="send"
-      maxlength="500"
+      maxlength="30"
       autocomplete="off"
       autocorrect="off"
       spellcheck="false"
+      enterkeyhint="send"
       placeholder="发消息…"
     >
 
 
     <button
       class="send"
-      id="sendBtn"
       type="submit"
-      aria-label="发送"
     >
-      ➤
+      ↑
     </button>
 
   </form>
@@ -160,15 +174,11 @@
 </div>
 
 
-<div
-  class="toast"
-  id="toast"
-  role="status"
-  aria-live="polite"
-></div>
+<script
+  src="script.js"
+  defer
+></script>
 
-
-<script src="script.js" defer></script>
 
 </body>
 </html>
