@@ -6,7 +6,6 @@
   <meta name="theme-color" content="#f7f7f8" />
   <title>Spider-Man Chat</title>
 
-  <!-- 动态时间戳自动破缓存 -->
   <script>
     const css = document.createElement('link');
     css.rel = 'stylesheet';
@@ -16,34 +15,27 @@
 </head>
 <body>
 
-  <!-- 蜘蛛侠特效图层 (Canvas 硬件级正片叠底，免疫键盘顶起) -->
-  <div class="spiderman-overlay" id="spiderOverlay" aria-hidden="true">
-    <canvas id="spiderCanvas" class="spiderman-canvas"></canvas>
-    <!-- 隐藏式解码视频源 -->
-    <video 
-      id="spiderVideo" 
-      playsinline 
-      webkit-playsinline 
-      x5-playsinline 
-      preload="auto"
-      muted
-      style="display: none;"
-    >
-      <source src="spider.mp4" type="video/mp4">
-      <source src="293_raw.mov" type="video/quicktime">
-    </video>
-  </div>
-
   <main class="chat-container" id="chatContainer">
-    <!-- 顶部导航条 -->
     <header class="chat-header">
       <div class="header-title">聊天</div>
     </header>
 
-    <!-- 消息流区域 -->
+    <div class="spiderman-overlay" id="spiderOverlay" aria-hidden="true">
+      <video 
+        id="spiderVideo" 
+        class="spiderman-video"
+        playsinline
+        webkit-playsinline
+        x5-playsinline
+        preload="auto"
+      >
+        <source src="spider.mp4" type="video/mp4">
+        <source src="293_raw.mov" type="video/quicktime">
+      </video>
+    </div>
+
     <section class="chat-flow" id="chatFlow" aria-live="polite"></section>
 
-    <!-- 底部输入栏 -->
     <form class="chat-bar" id="chatForm" onsubmit="return false;">
       <div class="input-container">
         <input 
@@ -64,7 +56,6 @@
     </form>
   </main>
 
-  <!-- 动态时间戳自动破缓存 -->
   <script>
     const js = document.createElement('script');
     js.src = 'script.js?t=' + Date.now();
