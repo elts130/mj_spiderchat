@@ -157,7 +157,7 @@ body {
   box-shadow: 0 2px 8px rgba(0, 122, 255, 0.15);
 }
 
-/* ================= 蜘蛛侠视频特效图层 ================= */
+/* ================= 蜘蛛侠视频特效图层 (纯白融合优化) ================= */
 .spiderman-overlay {
   position: absolute;
   top: 0;
@@ -169,7 +169,7 @@ body {
   display: none;
   align-items: center;
   justify-content: center;
-  background: transparent;
+  background: #ffffff; /* 确保背景底色为纯白 */
 }
 
 .spiderman-overlay.active {
@@ -181,4 +181,8 @@ body {
   height: 100%;
   object-fit: contain;
   pointer-events: none;
+  
+  /* 核心融合技术：消除视频中的浅灰/色块矩形边框，使其与纯白底色融为一体 */
+  mix-blend-mode: multiply;
+  filter: contrast(1.06) brightness(1.04);
 }
