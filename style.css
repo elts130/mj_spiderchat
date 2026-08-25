@@ -15,43 +15,9 @@ body {
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
-  position: relative;
 }
 
-/* ================= 蜘蛛侠特效图层 (核心重构) ================= */
-.spiderman-overlay {
-  position: fixed;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px;
-  /* 不设固定高度，杜绝键盘弹起时 vh 缩水导致压缩变形 */
-  height: auto;
-  z-index: 9999;
-  pointer-events: none;
-  display: none;
-  justify-content: center;
-  align-items: flex-start;
-  padding-top: env(safe-area-inset-top);
-}
-
-.spiderman-overlay.active {
-  display: flex;
-}
-
-/* Canvas 渲染层：实现 100% 可靠的正片叠底与置顶展示 */
-.spiderman-canvas {
-  width: 90%;
-  max-width: 380px;
-  height: auto;
-  display: block;
-  pointer-events: none;
-  mix-blend-mode: multiply; /* 彻底剔除白底，文字透出 */
-  filter: contrast(1.06) brightness(1.02);
-}
-
-/* ================= 聊天视窗容器 ================= */
+/* ================= 聊天视窗主容器 ================= */
 .chat-container {
   width: 100%;
   max-width: 480px;
@@ -78,7 +44,7 @@ body {
   padding-top: calc(8px + env(safe-area-inset-top));
   padding-bottom: 10px;
   text-align: center;
-  background: rgba(247, 247, 248, 0.92);
+  background: rgba(247, 247, 248, 0.95);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 0.5px solid rgba(0, 0, 0, 0.08);
@@ -89,6 +55,36 @@ body {
   font-size: 17px;
   font-weight: 600;
   color: #000000;
+}
+
+/* ================= 蜘蛛侠特效图层 (置顶且免疫键盘压缩) ================= */
+.spiderman-overlay {
+  position: absolute;
+  top: calc(44px + env(safe-area-inset-top)); /* 紧贴顶部导航下方 */
+  left: 0;
+  right: 0;
+  width: 100%;
+  z-index: 20; /* 高于消息流(1)，低于输入栏(30) */
+  pointer-events: none;
+  display: none;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.spiderman-overlay.active {
+  display: flex;
+}
+
+/* 正片叠底核心：彻底消除白色背景方块，气泡与文字完美透过 */
+.spiderman-video {
+  width: 88%;
+  max-width: 360px;
+  height: auto;
+  object-fit: contain;
+  object-position: top center;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+  background: transparent;
 }
 
 /* ================= 消息流区域 ================= */
@@ -142,7 +138,7 @@ body {
   display: flex;
   gap: 8px;
   align-items: center;
-  z-index: 20;
+  z-index: 30;
 }
 
 .input-container {
