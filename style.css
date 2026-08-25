@@ -7,21 +7,28 @@
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
 }
 
-body {
-  background-color: #e5e5ea;
+html, body {
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  background-color: #ededed;
+}
+
+/* ================= 响应式外层容器 ================= */
+.app-wrapper {
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
   display: flex;
   justify-content: center;
   align-items: center;
-  width: 100vw;
-  height: 100vh;
-  height: 100dvh;
-  overflow: hidden;
 }
 
-/* ================= 聊天视窗主容器（全端自动适配） ================= */
+/* 手机全屏，平板/PC居中卡片 */
 .chat-container {
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
   height: 100dvh;
   background: #f7f7f8;
   display: flex;
@@ -30,14 +37,12 @@ body {
   overflow: hidden;
 }
 
-/* iPad 平板与电脑 PC 端：自动转换为居中精致卡片 */
 @media (min-width: 768px) {
   .chat-container {
-    width: 100%;
     max-width: 480px;
     height: 88vh;
-    max-height: 880px;
-    border-radius: 28px;
+    max-height: 860px;
+    border-radius: 24px;
     box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12);
     border: 1px solid rgba(0, 0, 0, 0.08);
   }
@@ -45,10 +50,12 @@ body {
 
 /* ================= 顶部导航条 ================= */
 .chat-header {
-  padding-top: calc(10px + env(safe-area-inset-top));
-  padding-bottom: 12px;
-  text-align: center;
-  background: rgba(247, 247, 248, 0.92);
+  height: 48px;
+  padding-top: env(safe-area-inset-top);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(247, 247, 248, 0.95);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 0.5px solid rgba(0, 0, 0, 0.08);
@@ -62,18 +69,19 @@ body {
   color: #000000;
 }
 
-/* ================= 蜘蛛侠特效图层 (绝对置顶 + 纯净正片叠底) ================= */
+/* ================= 蜘蛛侠特效图层 ================= */
 .spiderman-overlay {
   position: absolute;
-  top: 0;
+  top: 48px;
+  top: calc(48px + env(safe-area-inset-top));
   left: 0;
+  right: 0;
   width: 100%;
-  height: 100%;
-  z-index: 999;
   pointer-events: none;
   display: none;
   justify-content: center;
   align-items: flex-start;
+  z-index: 20; 
   background: transparent;
 }
 
@@ -81,16 +89,20 @@ body {
   display: flex;
 }
 
+/* 终极透字方案：提亮去噪点 + 正片叠底 */
 .spiderman-video {
   width: 100%;
-  max-width: 420px;
+  max-width: 380px;
   height: auto;
-  max-height: 68vh;
+  max-height: 60vh;
   object-fit: contain;
   object-position: top center;
   pointer-events: none;
-  mix-blend-mode: multiply; /* 核心：白色底板变透明，下方文字与气泡完美透出 */
   background: transparent;
+  /* 第一层：强制把视频伪白底提亮成纯白色 */
+  filter: contrast(1.08) brightness(1.05); 
+  /* 第二层：纯白滤除，实现完美透字 */
+  mix-blend-mode: multiply; 
 }
 
 /* ================= 消息流区域 ================= */
@@ -103,6 +115,7 @@ body {
   gap: 12px;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
+  z-index: 1;
 }
 
 .chat-flow::-webkit-scrollbar {
@@ -144,7 +157,7 @@ body {
   gap: 8px;
   align-items: center;
   flex-shrink: 0;
-  z-index: 20;
+  z-index: 50;
 }
 
 .input-container {
@@ -158,7 +171,8 @@ body {
   padding: 10px 16px;
   border-radius: 20px;
   color: #000000;
-  font-size: 16px;
+  /* 强制 16px 绝不允许修改，防止 iOS Safari 诡异放大 */
+  font-size: 16px; 
   outline: none;
   -webkit-appearance: none;
 }
@@ -180,9 +194,9 @@ body {
   cursor: pointer;
   touch-action: manipulation;
   flex-shrink: 0;
-  transition: transform 0.15s ease;
+  transition: transform 0.1s;
 }
 
 .chat-bar button:active {
-  transform: scale(0.92);
+  transform: scale(0.9);
 }
