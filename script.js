@@ -1,9 +1,10 @@
 /**
- * 抖音同款蜘蛛侠特效控制器 (高精生命周期锁 + 零延迟必出机制)
+ * 抖音同款蜘蛛侠特效控制器 (高敏事件监听 + 零延迟必出机制)
  */
 const chatFlow = document.getElementById('chatFlow');
 const msgInput = document.getElementById('msgInput');
 const chatForm = document.getElementById('chatForm');
+const sendBtn = document.getElementById('sendBtn');
 const spiderOverlay = document.getElementById('spiderOverlay');
 const spiderVideo = document.getElementById('spiderVideo');
 
@@ -14,7 +15,6 @@ const clips = [
   { id: 2, start: 7.1, end: 10.4 }   // 第 3 款：近距离俯冲
 ];
 
-// 单调自增会话锁，防止异步竞态与误杀
 let activeEffectId = 0;
 let lastClipIndex = -1;
 let repeatCount = 0;
@@ -46,7 +46,7 @@ function stopSpiderEffect(targetId) {
   spiderOverlay.classList.remove('active');
 }
 
-// 触发特效 (零延迟秒开 + WebKit 寻轨保护)
+// 触发特效
 function playSpiderEffect() {
   const thisEffectId = ++activeEffectId;
   const clip = getNextClip();
@@ -56,31 +56,26 @@ function playSpiderEffect() {
   const maxAllowedDuration = (endTime - startTime) + 0.4;
   const triggerTime = performance.now();
 
-  // 同步初始化状态
   spiderVideo.currentTime = startTime;
   spiderVideo.muted = false;
   spiderVideo.volume = 1.0;
 
   spiderOverlay.classList.add('active');
 
-  // 主线程同步拉起播放，保留 iOS 音频手势权限
   const playPromise = spiderVideo.play();
   if (playPromise !== undefined) {
     playPromise.catch(() => {
-      // 若受系统限制，降级为静音确保画面 100% 播放
       spiderVideo.muted = true;
       spiderVideo.play();
     });
   }
 
-  // 高精帧监听循环（结合时间窗口与单调 ID 锁）
   function frameLoop() {
     if (thisEffectId !== activeEffectId) return;
 
     const cur = spiderVideo.currentTime;
     const elapsedSec = (performance.now() - triggerTime) / 1000;
 
-    // 严密判定：视频已进入目标区间且到达结束点，或真实时间达到片段上限
     const inRange = (cur >= startTime - 0.1) && (cur <= endTime + 0.8);
     const reachedEnd = (cur >= endTime);
     const timeout = (elapsedSec >= maxAllowedDuration);
@@ -98,12 +93,12 @@ function playSpiderEffect() {
 
 spiderVideo.addEventListener('ended', () => stopSpiderEffect());
 
-// 消息发送与触发处理
+// 核心消息发送逻辑
 function handleSend() {
   const text = msgInput.value.trim();
   if (!text) return;
 
-  // 渲染消息气泡
+  // 1. 立即渲染消息气泡
   const row = document.createElement('div');
   row.className = 'msg-row';
   const bubble = document.createElement('div');
@@ -115,13 +110,26 @@ function handleSend() {
   msgInput.value = '';
   chatFlow.scrollTop = chatFlow.scrollHeight;
 
-  // 大小写完全不敏感匹配 (mj / Mj / MJ / mJ 均可秒触发)
+  // 2. 大小写不敏感匹配 (mj / MJ / Mj / mJ)
   if (text.toLowerCase().includes('mj')) {
     playSpiderEffect();
   }
 }
 
+// 多重事件绑定，杜绝移动端点击不响应
+sendBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  handleSend();
+});
+
 chatForm.addEventListener('submit', (e) => {
   e.preventDefault();
   handleSend();
+});
+
+msgInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    handleSend();
+  }
 });
