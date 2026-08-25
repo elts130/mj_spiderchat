@@ -1,0 +1,184 @@
+/* ================= 全局基础重置 ================= */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+}
+
+body {
+  background-color: #f2f2f7;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* ================= 聊天视窗容器 ================= */
+.chat-container {
+  width: 100%;
+  max-width: 480px;
+  height: 100%;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+@media (min-width: 600px) {
+  .chat-container {
+    height: 92vh;
+    max-height: 880px;
+    border-radius: 36px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.03);
+    border: 1px solid rgba(0, 0, 0, 0.04);
+  }
+}
+
+/* ================= 消息流瀑布 ================= */
+.chat-flow {
+  flex: 1;
+  padding: 24px 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  z-index: 1;
+}
+
+.chat-flow::-webkit-scrollbar {
+  display: none;
+}
+
+.msg-row {
+  display: flex;
+  width: 100%;
+  justify-content: flex-end;
+}
+
+/* iOS 风格平滑气泡与弹出动画 */
+.msg-bubble {
+  max-width: 78%;
+  padding: 12px 18px;
+  border-radius: 22px;
+  font-size: 16px;
+  letter-spacing: -0.2px;
+  line-height: 1.45;
+  word-break: break-word;
+  background: linear-gradient(135deg, #007aff 0%, #0062d2 100%);
+  color: #ffffff;
+  border-bottom-right-radius: 5px;
+  box-shadow: 0 4px 16px rgba(0, 122, 255, 0.22);
+  font-weight: 500;
+  animation: bubblePop 0.28s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes bubblePop {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ================= 底部毛玻璃输入栏 ================= */
+.chat-bar {
+  padding: 12px 16px;
+  padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  z-index: 30;
+}
+
+.input-container {
+  flex: 1;
+  position: relative;
+}
+
+.chat-bar input {
+  width: 100%;
+  background: #f1f2f6;
+  border: 1.5px solid transparent;
+  padding: 12px 20px;
+  border-radius: 26px;
+  color: #1c1c1e;
+  font-size: 16px;
+  outline: none;
+  -webkit-appearance: none;
+  transition: all 0.25s ease;
+}
+
+.chat-bar input::placeholder {
+  color: #8e8e93;
+}
+
+.chat-bar input:focus {
+  background: #ffffff;
+  border-color: #007aff;
+  box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.12);
+}
+
+/* 发送按钮 */
+.chat-bar button {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, #007aff 0%, #0062d2 100%);
+  border: none;
+  color: #ffffff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  -webkit-appearance: none;
+  box-shadow: 0 4px 14px rgba(0, 122, 255, 0.28);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
+  flex-shrink: 0;
+}
+
+.chat-bar button:active {
+  transform: scale(0.9);
+  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.15);
+}
+
+/* ================= 蜘蛛侠视频特效图层 ================= */
+.spiderman-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 20;
+  pointer-events: none;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+}
+
+.spiderman-overlay.active {
+  display: flex;
+}
+
+.spiderman-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
