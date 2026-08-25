@@ -7,29 +7,39 @@
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
 }
 
+/* 核心修复：使用 CSS 变量接收 JS 实时计算的真实视口高度，废弃 100vh */
 html, body {
   width: 100%;
-  height: 100%;
-  height: 100dvh;
+  height: var(--app-height, 100%);
   overflow: hidden;
   background-color: #ededed;
+}
+
+/* ================= 隐藏的解码器 ================= */
+.video-decoder-box {
+  position: absolute;
+  top: -9999px;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0.01;
+  pointer-events: none;
+  z-index: -100;
 }
 
 /* ================= 响应式外层容器 ================= */
 .app-wrapper {
   width: 100%;
   height: 100%;
-  height: 100dvh;
   display: flex;
   justify-content: center;
   align-items: center;
 }
 
-/* 手机全屏，平板/PC居中卡片 */
+/* 聊天容器：相对定位体系，彻底废除 fixed */
 .chat-container {
   width: 100%;
   height: 100%;
-  height: 100dvh;
   background: #f7f7f8;
   display: flex;
   flex-direction: column;
@@ -37,10 +47,11 @@ html, body {
   overflow: hidden;
 }
 
+/* 媒体查询：iPad 与 PC 端优雅居中 */
 @media (min-width: 768px) {
   .chat-container {
     max-width: 480px;
-    height: 88vh;
+    height: 88%;
     max-height: 860px;
     border-radius: 24px;
     box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12);
@@ -50,14 +61,14 @@ html, body {
 
 /* ================= 顶部导航条 ================= */
 .chat-header {
-  height: 48px;
+  height: auto;
+  min-height: 44px;
   padding-top: env(safe-area-inset-top);
+  padding-bottom: 12px;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  background: rgba(247, 247, 248, 0.95);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(247, 247, 248, 0.96);
   border-bottom: 0.5px solid rgba(0, 0, 0, 0.08);
   z-index: 10;
   flex-shrink: 0;
@@ -69,40 +80,29 @@ html, body {
   color: #000000;
 }
 
-/* ================= 蜘蛛侠特效图层 ================= */
+/* ================= 蜘蛛侠特效 Canvas 层 (基于相对定位悬挂) ================= */
 .spiderman-overlay {
   position: absolute;
-  top: 48px;
-  top: calc(48px + env(safe-area-inset-top));
+  top: calc(44px + env(safe-area-inset-top)); /* 紧贴在导航栏下方 */
   left: 0;
-  right: 0;
   width: 100%;
   pointer-events: none;
   display: none;
   justify-content: center;
   align-items: flex-start;
   z-index: 20; 
-  background: transparent;
 }
 
 .spiderman-overlay.active {
   display: flex;
 }
 
-/* 终极透字方案：提亮去噪点 + 正片叠底 */
-.spiderman-video {
-  width: 100%;
+.spiderman-canvas {
+  width: 90%;
   max-width: 380px;
   height: auto;
-  max-height: 60vh;
-  object-fit: contain;
-  object-position: top center;
   pointer-events: none;
-  background: transparent;
-  /* 第一层：强制把视频伪白底提亮成纯白色 */
-  filter: contrast(1.08) brightness(1.05); 
-  /* 第二层：纯白滤除，实现完美透字 */
-  mix-blend-mode: multiply; 
+  /* 此处无需任何 mix-blend-mode 或 filter，全靠 JS 物理抠图 */
 }
 
 /* ================= 消息流区域 ================= */
@@ -129,7 +129,7 @@ html, body {
 }
 
 .msg-bubble {
-  max-width: 78%;
+  max-width: 80%;
   padding: 10px 16px;
   border-radius: 18px;
   font-size: 16px;
@@ -157,7 +157,7 @@ html, body {
   gap: 8px;
   align-items: center;
   flex-shrink: 0;
-  z-index: 50;
+  z-index: 30;
 }
 
 .input-container {
@@ -171,8 +171,7 @@ html, body {
   padding: 10px 16px;
   border-radius: 20px;
   color: #000000;
-  /* 强制 16px 绝不允许修改，防止 iOS Safari 诡异放大 */
-  font-size: 16px; 
+  font-size: 16px; /* 强制 16px 防止 iOS 聚焦时误放大页面 */
   outline: none;
   -webkit-appearance: none;
 }
