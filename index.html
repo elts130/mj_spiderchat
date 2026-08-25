@@ -3,27 +3,42 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#ffffff" />
+  <meta name="theme-color" content="#f7f7f8" />
   <title>Spider-Man Chat</title>
-  <link rel="stylesheet" href="style.css" />
+
+  <!-- 动态时间戳自动破缓存 -->
+  <script>
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'style.css?t=' + Date.now();
+    document.head.appendChild(css);
+  </script>
 </head>
 <body>
 
+  <!-- 蜘蛛侠特效图层 (Canvas 硬件级正片叠底，免疫键盘顶起) -->
+  <div class="spiderman-overlay" id="spiderOverlay" aria-hidden="true">
+    <canvas id="spiderCanvas" class="spiderman-canvas"></canvas>
+    <!-- 隐藏式解码视频源 -->
+    <video 
+      id="spiderVideo" 
+      playsinline 
+      webkit-playsinline 
+      x5-playsinline 
+      preload="auto"
+      muted
+      style="display: none;"
+    >
+      <source src="spider.mp4" type="video/mp4">
+      <source src="293_raw.mov" type="video/quicktime">
+    </video>
+  </div>
+
   <main class="chat-container" id="chatContainer">
-    <!-- 蜘蛛侠原版特效图层 (顶部触发) -->
-    <div class="spiderman-overlay" id="spiderOverlay" aria-hidden="true">
-      <video 
-        id="spiderVideo" 
-        class="spiderman-video"
-        playsinline
-        webkit-playsinline
-        x5-playsinline
-        preload="auto"
-      >
-        <source src="spider.mp4" type="video/mp4">
-        <source src="293_raw.mov" type="video/quicktime">
-      </video>
-    </div>
+    <!-- 顶部导航条 -->
+    <header class="chat-header">
+      <div class="header-title">聊天</div>
+    </header>
 
     <!-- 消息流区域 -->
     <section class="chat-flow" id="chatFlow" aria-live="polite"></section>
@@ -49,6 +64,11 @@
     </form>
   </main>
 
-  <script src="script.js"></script>
+  <!-- 动态时间戳自动破缓存 -->
+  <script>
+    const js = document.createElement('script');
+    js.src = 'script.js?t=' + Date.now();
+    document.body.appendChild(js);
+  </script>
 </body>
 </html>
