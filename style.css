@@ -8,31 +8,21 @@
 }
 
 body {
-  background-color: #f2f2f7;
+  background-color: #e5e5ea;
   display: flex;
   justify-content: center;
   align-items: center;
+  width: 100vw;
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
 }
 
-/* ================= 隐藏式解码源 (视口外维持解码) ================= */
-.video-source {
-  position: fixed;
-  top: -9999px;
-  left: -9999px;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* ================= 聊天视窗主容器 ================= */
+/* ================= 聊天视窗主容器（全端自动适配） ================= */
 .chat-container {
-  width: 100%;
-  max-width: 480px;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
   background: #f7f7f8;
   display: flex;
   flex-direction: column;
@@ -40,26 +30,30 @@ body {
   overflow: hidden;
 }
 
-@media (min-width: 600px) {
+/* iPad 平板与电脑 PC 端：自动转换为居中精致卡片 */
+@media (min-width: 768px) {
   .chat-container {
-    height: 92vh;
+    width: 100%;
+    max-width: 480px;
+    height: 88vh;
     max-height: 880px;
-    border-radius: 36px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.06);
-    border: 1px solid rgba(0, 0, 0, 0.04);
+    border-radius: 28px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12);
+    border: 1px solid rgba(0, 0, 0, 0.08);
   }
 }
 
 /* ================= 顶部导航条 ================= */
 .chat-header {
-  padding-top: calc(8px + env(safe-area-inset-top));
-  padding-bottom: 10px;
+  padding-top: calc(10px + env(safe-area-inset-top));
+  padding-bottom: 12px;
   text-align: center;
-  background: rgba(247, 247, 248, 0.95);
+  background: rgba(247, 247, 248, 0.92);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 0.5px solid rgba(0, 0, 0, 0.08);
   z-index: 10;
+  flex-shrink: 0;
 }
 
 .header-title {
@@ -68,32 +62,34 @@ body {
   color: #000000;
 }
 
-/* ================= 蜘蛛侠特效图层 (置顶且正片叠底透字) ================= */
+/* ================= 蜘蛛侠特效图层 (绝对置顶 + 纯净正片叠底) ================= */
 .spiderman-overlay {
   position: absolute;
-  top: calc(44px + env(safe-area-inset-top));
+  top: 0;
   left: 0;
   width: 100%;
-  z-index: 20;
+  height: 100%;
+  z-index: 999;
   pointer-events: none;
   display: none;
   justify-content: center;
   align-items: flex-start;
+  background: transparent;
 }
 
 .spiderman-overlay.active {
   display: flex;
 }
 
-/* Canvas 混合模式：利用硬件加速实现纯净正片叠底，彻底剔除白底色差 */
-.spiderman-canvas {
-  width: 85%;
-  max-width: 360px;
+.spiderman-video {
+  width: 100%;
+  max-width: 420px;
   height: auto;
-  display: block;
+  max-height: 68vh;
+  object-fit: contain;
+  object-position: top center;
   pointer-events: none;
-  mix-blend-mode: multiply; /* 正片叠底：白底全透，文字完全透出 */
-  filter: contrast(1.18) brightness(1.03); /* 压实纯白边缘，消除压缩噪点灰边 */
+  mix-blend-mode: multiply; /* 核心：白色底板变透明，下方文字与气泡完美透出 */
   background: transparent;
 }
 
@@ -107,7 +103,6 @@ body {
   gap: 12px;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
-  z-index: 1;
 }
 
 .chat-flow::-webkit-scrollbar {
@@ -127,10 +122,10 @@ body {
   font-size: 16px;
   line-height: 1.4;
   word-break: break-word;
-  background: #2563eb;
+  background: #007aff;
   color: #ffffff;
   border-bottom-right-radius: 4px;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.2);
   animation: bubblePop 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
@@ -148,7 +143,8 @@ body {
   display: flex;
   gap: 8px;
   align-items: center;
-  z-index: 30;
+  flex-shrink: 0;
+  z-index: 20;
 }
 
 .input-container {
@@ -174,7 +170,7 @@ body {
 .chat-bar button {
   width: 40px;
   height: 40px;
-  background: #2563eb;
+  background: #007aff;
   border: none;
   color: #ffffff;
   border-radius: 50%;
