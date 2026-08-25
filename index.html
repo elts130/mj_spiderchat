@@ -1,199 +1,96 @@
-/**
- * Spider-Man Chat 终极稳定版控制器
- * - 解决 iOS 异步权限拦截导致的无画面问题
- * - 解决白底遮挡与软键盘挤压变形
- */
-(function () {
-  'use strict';
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta 
+    name="viewport" 
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" 
+  />
+  <meta name="theme-color" content="#f7f7f8" />
+  <title>Spider-Man Chat</title>
+  <link rel="stylesheet" href="style.css?v=prod_1.0" />
+</head>
+<body>
 
-  // 1. 动态视口高度适配 (键盘弹起自动调整)
-  function syncViewport() {
-    const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-    document.documentElement.style.setProperty('--viewport-height', `${height}px`);
-  }
+  <!-- 全局异常/状态提示 Toast -->
+  <div class="toast-notice" id="toastNotice" role="alert" aria-live="assertive"></div>
 
-  window.addEventListener('resize', syncViewport);
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', syncViewport);
-    window.visualViewport.addEventListener('scroll', syncViewport);
-  }
-  syncViewport();
+  <div class="app-wrapper">
+    <main class="chat-container" id="chatContainer">
+      
+      <!-- 顶部导航栏 (含蜘蛛侠状态与音效开关) -->
+      <header class="chat-header">
+        <div class="header-left">
+          <span class="status-indicator"></span>
+          <span class="header-title">蜘蛛侠互动聊天</span>
+        </div>
+        <div class="header-right">
+          <button type="button" class="sound-toggle-btn" id="soundToggleBtn" aria-label="切换音效">
+            <svg id="soundOnIcon" class="icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            </svg>
+            <svg id="soundOffIcon" class="icon hidden" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+              <line x1="23" y1="9" x2="17" y2="15"></line>
+              <line x1="17" y1="9" x2="23" y2="15"></line>
+            </svg>
+          </button>
+        </div>
+      </header>
 
-  // 2. 精准片段定义：人物露头起播 -> 人物完全离屏退场立即切断
-  const CLIPS = [
-    { id: 0, start: 0.05, end: 2.85 },  // 第 1 款：正上方倒挂滑落 -> 向上收回
-    { id: 1, start: 3.50, end: 6.30 },  // 第 2 款：顶部晃荡穿梭 -> 飞出屏幕
-    { id: 2, start: 7.10, end: 9.90 }   // 第 3 款：近距离俯冲 -> 弹回上方
-  ];
+      <!-- 视口核心交互区 -->
+      <div class="chat-viewport" id="chatViewport">
+        
+        <!-- 消息流区域 -->
+        <section class="chat-flow" id="chatFlow" aria-live="polite">
+          <div class="msg-row bot">
+            <div class="msg-bubble">你好！在下方输入 <b>mj</b> 发送，即可召唤我的专属出场特效！🕷️</div>
+          </div>
+        </section>
 
-  let chatFlow, msgInput, chatForm, sendBtn, spiderOverlay, spiderVideo;
-  let activeSessionId = 0;
-  let lastClipIndex = -1;
-  let repeatCount = 0;
-  let isThrottled = false;
+        <!-- 蜘蛛侠特效悬挂层 (纯净正片叠底，动画平滑淡入淡出) -->
+        <div class="spiderman-overlay" id="spiderOverlay" aria-hidden="true">
+          <video 
+            id="spiderVideo" 
+            class="spiderman-video"
+            playsinline
+            webkit-playsinline
+            x5-playsinline
+            x5-video-player-type="h5-page"
+            t7-video-player-type="inline"
+            preload="auto"
+            muted
+          >
+            <source src="spider.mp4" type="video/mp4">
+          </video>
+        </div>
 
-  function initElements() {
-    chatFlow = document.getElementById('chatFlow');
-    msgInput = document.getElementById('msgInput');
-    chatForm = document.getElementById('chatForm');
-    sendBtn = document.getElementById('sendBtn');
-    spiderOverlay = document.getElementById('spiderOverlay');
-    spiderVideo = document.getElementById('spiderVideo');
-  }
+      </div>
 
-  // 随机抽取 (防连抽相同特效)
-  function getNextClip() {
-    const all = [0, 1, 2];
-    let pool = all;
-    if (repeatCount >= 2) {
-      pool = all.filter(i => i !== lastClipIndex);
-    }
-    const idx = pool[Math.floor(Math.random() * pool.length)];
-    if (idx === lastClipIndex) {
-      repeatCount++;
-    } else {
-      lastClipIndex = idx;
-      repeatCount = 1;
-    }
-    return CLIPS[idx];
-  }
+      <!-- 底部输入栏 -->
+      <form class="chat-bar" id="chatForm" onsubmit="return false;">
+        <div class="input-container">
+          <input 
+            type="text" 
+            id="msgInput" 
+            placeholder="输入 mj 触发蜘蛛侠..." 
+            autocomplete="off"
+            autocorrect="off"
+            spellcheck="false"
+          />
+        </div>
+        <button type="button" id="sendBtn" aria-label="发送消息">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </form>
+      
+    </main>
+  </div>
 
-  // 停止特效并隐藏
-  function stopSpiderEffect(sessionId) {
-    if (sessionId && sessionId !== activeSessionId) return;
-    if (spiderVideo) spiderVideo.pause();
-    if (spiderOverlay) spiderOverlay.classList.remove('active');
-  }
-
-  // 核心特效播放逻辑 (同步直拉启动，确保 100% 展现画面)
-  function playSpiderEffect() {
-    if (!spiderVideo || !spiderOverlay) return;
-
-    const currentSession = ++activeSessionId;
-    const clip = getNextClip();
-    const startTime = clip.start;
-    const endTime = clip.end;
-    const duration = endTime - startTime;
-    const startTimestamp = performance.now();
-
-    // 1. 同步设置指针与状态
-    spiderVideo.currentTime = startTime;
-    spiderVideo.muted = false;
-    spiderVideo.volume = 1.0;
-    spiderOverlay.classList.add('active');
-
-    // 2. 主线程同步拉起 play()，保留 iOS 最高手势权限
-    const promise = spiderVideo.play();
-    if (promise !== undefined) {
-      promise.catch(() => {
-        spiderVideo.muted = true; // 降级静音秒起
-        spiderVideo.play();
-      });
-    }
-
-    let seekConfirmed = false;
-
-    // 3. 高精帧循环检测 (防异步寻轨误判)
-    function monitorLoop() {
-      if (currentSession !== activeSessionId) return;
-
-      const curTime = spiderVideo.currentTime;
-      const elapsed = (performance.now() - startTimestamp) / 1000;
-
-      // 确认时间指针已成功跳至当前片段附近
-      if (!seekConfirmed) {
-        if (Math.abs(curTime - startTime) < 0.6 || elapsed > 0.15) {
-          seekConfirmed = true;
-        }
-      }
-
-      // 仅在确认进入片段后，到达结束点或达到动作时长瞬间关闭
-      if (seekConfirmed) {
-        if (curTime >= endTime || elapsed >= duration + 0.3) {
-          stopSpiderEffect(currentSession);
-          return;
-        }
-      }
-
-      requestAnimationFrame(monitorLoop);
-    }
-
-    requestAnimationFrame(monitorLoop);
-  }
-
-  // 消息发送核心
-  function handleSend() {
-    if (isThrottled) return;
-    isThrottled = true;
-    setTimeout(() => { isThrottled = false; }, 80);
-
-    if (!msgInput || !chatFlow) initElements();
-    if (!msgInput) return;
-
-    const text = msgInput.value.trim();
-    if (!text) return;
-
-    // 1. 上屏渲染气泡
-    try {
-      const row = document.createElement('div');
-      row.className = 'msg-row';
-      const bubble = document.createElement('div');
-      bubble.className = 'msg-bubble';
-      bubble.textContent = text;
-      row.appendChild(bubble);
-      chatFlow.appendChild(row);
-
-      msgInput.value = '';
-      chatFlow.scrollTop = chatFlow.scrollHeight;
-    } catch (err) {
-      console.error(err);
-    }
-
-    // 2. 匹配 mj / MJ / Mj / mJ
-    if (text.toLowerCase().includes('mj')) {
-      playSpiderEffect();
-    }
-  }
-
-  // 全局事件监听
-  function setup() {
-    initElements();
-
-    if (spiderVideo) {
-      spiderVideo.addEventListener('ended', () => stopSpiderEffect());
-    }
-
-    if (chatForm) {
-      chatForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        handleSend();
-      });
-    }
-
-    if (sendBtn) {
-      sendBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        handleSend();
-      });
-      sendBtn.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        handleSend();
-      });
-    }
-
-    if (msgInput) {
-      msgInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.keyCode === 13) {
-          e.preventDefault();
-          handleSend();
-        }
-      });
-    }
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', setup);
-  } else {
-    setup();
-  }
-})();
+  <script src="script.js?v=prod_1.0"></script>
+</body>
+</html>
