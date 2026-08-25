@@ -18,7 +18,7 @@ body {
   position: relative;
 }
 
-/* ================= 蜘蛛侠特效图层 (固定视口顶部，防软键盘压缩) ================= */
+/* ================= 蜘蛛侠特效图层 (核心重构) ================= */
 .spiderman-overlay {
   position: fixed;
   top: 0;
@@ -26,29 +26,29 @@ body {
   transform: translateX(-50%);
   width: 100%;
   max-width: 480px;
-  height: 100vh;
-  height: 100dvh;
+  /* 不设固定高度，杜绝键盘弹起时 vh 缩水导致压缩变形 */
+  height: auto;
   z-index: 9999;
   pointer-events: none;
   display: none;
-  align-items: flex-start;
   justify-content: center;
-  overflow: hidden;
+  align-items: flex-start;
+  padding-top: env(safe-area-inset-top);
 }
 
 .spiderman-overlay.active {
   display: flex;
 }
 
-.spiderman-video {
-  width: 100%;
+/* Canvas 渲染层：实现 100% 可靠的正片叠底与置顶展示 */
+.spiderman-canvas {
+  width: 90%;
+  max-width: 380px;
   height: auto;
-  max-height: 70vh;
-  object-fit: contain;
-  object-position: top center;
+  display: block;
   pointer-events: none;
-  mix-blend-mode: multiply;
-  filter: contrast(1.08) brightness(1.03);
+  mix-blend-mode: multiply; /* 彻底剔除白底，文字透出 */
+  filter: contrast(1.06) brightness(1.02);
 }
 
 /* ================= 聊天视窗容器 ================= */
