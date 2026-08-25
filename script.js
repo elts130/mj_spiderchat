@@ -1,327 +1,1432 @@
-/**
- * Spider-Man Chat 终极高可用生产级控制器
- * 1. 视口适配引擎 (VisualViewport 动态测算)
- * 2. 音视频解耦体系 (独立 Audio 实例手势提权 + 静音 Video 硬件渲染)
- * 3. 严格会话状态机 (Session 锁 + Seek 握手 + 时钟双重守卫)
- * 4. 资源预热与容灾兜底 Toast
- */
-(function () {
-  'use strict';
+(() => {
 
-  // 1. 动作片段精准时间戳定义 (秒)
-  const CLIPS = [
-    { id: 0, start: 0.05, end: 2.80, reply: '彼得·帕克倒挂路过！🕸️' },
-    { id: 1, start: 3.55, end: 6.30, reply: '呼！荡蛛丝穿梭中！💨' },
-    { id: 2, start: 7.15, end: 9.95, reply: '别怕，好邻居蜘蛛侠在此！🦸‍♂️' }
-  ];
+  "use strict";
 
-  // 2. DOM 元素句柄容器
-  const DOM = {
-    chatFlow: null,
-    msgInput: null,
-    chatForm: null,
-    sendBtn: null,
-    spiderOverlay: null,
-    spiderVideo: null,
-    soundToggleBtn: null,
-    soundOnIcon: null,
-    soundOffIcon: null,
-    toastNotice: null
+
+  /*
+   * =========================================================
+   * MJ Chat
+   * 抖音私信彩蛋模拟核心
+   * =========================================================
+   *
+   * 核心结构：
+   *
+   * 用户输入
+   *      ↓
+   * 正常添加聊天消息
+   *      ↓
+   * MJ Trigger
+   *      ↓
+   * Easter Egg Controller
+   *      ↓
+   * 视频立即出现
+   *      ↓
+   * 视频结束立即隐藏
+   *
+   * 聊天 UI 和彩蛋完全分离。
+   */
+
+
+  const CONFIG = {
+
+    /*
+     * 触发条件
+     *
+     * MJ
+     * mj
+     * hello MJ
+     *
+     * 会触发。
+     *
+     * emoji / major / mj123
+     * 不触发。
+     */
+
+    trigger:
+      /(?:^|[^a-z0-9])mj(?:$|[^a-z0-9])/i,
+
+
+    /*
+     * 推荐：
+     *
+     * 三个独立视频
+     */
+
+    clips: [
+
+      "assets/clips/mj-1.mp4",
+
+      "assets/clips/mj-2.mp4",
+
+      "assets/clips/mj-3.mp4"
+
+    ],
+
+
+    /*
+     * 兼容旧版 spider.mp4
+     */
+
+    combined:
+      "spider.mp4",
+
+
+    /*
+     * 原始视频时间段
+     */
+
+    combinedSegments: [
+
+      {
+        start: 0.05,
+        end: 2.80
+      },
+
+      {
+        start: 3.55,
+        end: 6.30
+      },
+
+      {
+        start: 7.15,
+        end: 9.95
+      }
+
+    ],
+
+
+    /*
+     * 彩蛋结束后消息回复延迟
+     */
+
+    replyDelay:
+      550,
+
+
+    /*
+     * 淡出提前量
+     */
+
+    fadeLead:
+      80,
+
+
+    /*
+     * 单文件模式超时时间
+     */
+
+    fallbackGrace:
+      180
+
   };
 
-  // 3. 运行态状态机
-  let activeSessionId = 0;
-  let lastClipIndex = -1;
-  let repeatStreak = 0;
-  let isThrottled = false;
-  let audioEffect = null;
-  let soundEnabled = true;
 
-  // 4. 显示全局 Toast
-  function showToast(msg, duration = 3000) {
-    if (!DOM.toastNotice) return;
-    DOM.toastNotice.textContent = msg;
-    DOM.toastNotice.classList.add('show');
-    setTimeout(() => {
-      DOM.toastNotice.classList.remove('show');
-    }, duration);
+  const $ =
+    id =>
+      document.getElementById(id);
+
+
+  const DOM = {
+
+    app:
+      $("app"),
+
+    viewport:
+      $("chatViewport"),
+
+    messages:
+      $("messages"),
+
+    composer:
+      $("composer"),
+
+    input:
+      $("messageInput"),
+
+    send:
+      $("sendButton"),
+
+    egg:
+      $("easterEgg"),
+
+    video:
+      $("eggVideo"),
+
+    sound:
+      $("soundBtn"),
+
+    soundOn:
+      $("soundOn"),
+
+    soundOff:
+      $("soundOff"),
+
+    toast:
+      $("toast")
+
+  };
+
+
+  const STATE = {
+
+    session:
+      0,
+
+    currentClip:
+      -1,
+
+    active:
+      false,
+
+    sound:
+      true,
+
+    standalone:
+      [],
+
+    combinedReady:
+      false,
+
+    timers:
+      new Set(),
+
+    viewportTimer:
+      null,
+
+    toastTimer:
+      null
+
+  };
+
+
+  /* =========================================================
+     Timer
+  ========================================================= */
+
+  function later(
+    callback,
+    delay
+  ) {
+
+    const id =
+      setTimeout(
+        () => {
+
+          STATE.timers.delete(
+            id
+          );
+
+          callback();
+
+        },
+        delay
+      );
+
+    STATE.timers.add(
+      id
+    );
+
+    return id;
+
   }
 
-  // 5. 动态视口高度测算 (免疫微信/iOS软键盘顶起)
+
+  function clearTimers() {
+
+    for (
+      const id
+      of STATE.timers
+    ) {
+
+      clearTimeout(
+        id
+      );
+
+    }
+
+    STATE.timers.clear();
+
+  }
+
+
+  /* =========================================================
+     Toast
+  ========================================================= */
+
+  function showToast(
+    message,
+    duration = 2200
+  ) {
+
+    DOM.toast.textContent =
+      message;
+
+    DOM.toast.classList.add(
+      "show"
+    );
+
+
+    clearTimeout(
+      STATE.toastTimer
+    );
+
+
+    STATE.toastTimer =
+      setTimeout(
+        () => {
+
+          DOM.toast.classList.remove(
+            "show"
+          );
+
+        },
+        duration
+      );
+
+  }
+
+
+  /* =========================================================
+     Viewport
+  ========================================================= */
+
   function syncViewport() {
-    const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-    document.documentElement.style.setProperty('--app-height', `${height}px`);
+
+    const viewport =
+      window.visualViewport;
+
+
+    const height =
+      Math.round(
+        viewport?.height ||
+        window.innerHeight ||
+        document.documentElement.clientHeight
+      );
+
+
+    document.documentElement.style.setProperty(
+
+      "--app-height",
+
+      `${height}px`
+
+    );
+
   }
 
-  // 6. 音效持久化与切换逻辑
-  function initAudioSystem() {
+
+  function queueViewportSync() {
+
+    clearTimeout(
+      STATE.viewportTimer
+    );
+
+
+    STATE.viewportTimer =
+      setTimeout(
+        syncViewport,
+        40
+      );
+
+  }
+
+
+  /* =========================================================
+     Sound
+  ========================================================= */
+
+  function loadSoundPreference() {
+
     try {
-      const savedPref = localStorage.getItem('spider_chat_sound');
-      if (savedPref !== null) {
-        soundEnabled = savedPref === 'true';
+
+      const value =
+        localStorage.getItem(
+          "mj-chat-sound"
+        );
+
+
+      if (
+        value !== null
+      ) {
+
+        STATE.sound =
+          value === "true";
+
       }
-    } catch (e) {}
+
+    }
+    catch (_) {}
+
 
     updateSoundUI();
 
-    // 独立音频实例：复用 spider.mp4 的音轨或独立音效源
-    audioEffect = new Audio('spider.mp4');
-    audioEffect.preload = 'auto';
-
-    if (DOM.soundToggleBtn) {
-      DOM.soundToggleBtn.addEventListener('click', () => {
-        soundEnabled = !soundEnabled;
-        try {
-          localStorage.setItem('spider_chat_sound', String(soundEnabled));
-        } catch (e) {}
-        updateSoundUI();
-        triggerHaptic(10);
-      });
-    }
   }
+
 
   function updateSoundUI() {
-    if (!DOM.soundOnIcon || !DOM.soundOffIcon) return;
-    if (soundEnabled) {
-      DOM.soundOnIcon.classList.remove('hidden');
-      DOM.soundOffIcon.classList.add('hidden');
-    } else {
-      DOM.soundOnIcon.classList.add('hidden');
-      DOM.soundOffIcon.classList.remove('hidden');
-    }
+
+    DOM.soundOn.classList.toggle(
+      "hidden",
+      !STATE.sound
+    );
+
+
+    DOM.soundOff.classList.toggle(
+      "hidden",
+      STATE.sound
+    );
+
   }
 
-  // 7. 触觉振动反馈
-  function triggerHaptic(duration = 20) {
-    if (navigator.vibrate) {
-      try { navigator.vibrate(duration); } catch (e) {}
+
+  function toggleSound() {
+
+    STATE.sound =
+      !STATE.sound;
+
+
+    try {
+
+      localStorage.setItem(
+
+        "mj-chat-sound",
+
+        String(
+          STATE.sound
+        )
+
+      );
+
     }
+    catch (_) {}
+
+
+    updateSoundUI();
+
   }
 
-  // 8. 伪随机算法 (防连续抽中相同动作)
-  function getNextClip() {
-    const all = [0, 1, 2];
-    let pool = all;
-    if (repeatStreak >= 2) {
-      pool = all.filter(i => i !== lastClipIndex);
+
+  /* =========================================================
+     Haptic
+  ========================================================= */
+
+  function haptic(
+    duration = 15
+  ) {
+
+    try {
+
+      if (
+        navigator.vibrate
+      ) {
+
+        navigator.vibrate(
+          duration
+        );
+
+      }
+
     }
-    const idx = pool[Math.floor(Math.random() * pool.length)];
-    if (idx === lastClipIndex) {
-      repeatStreak++;
-    } else {
-      lastClipIndex = idx;
-      repeatStreak = 1;
-    }
-    return CLIPS[idx];
+    catch (_) {}
+
   }
 
-  // 9. 终止并隐藏特效
-  function stopSpiderEffect(sessionId) {
-    if (sessionId && sessionId !== activeSessionId) return;
 
-    if (DOM.spiderOverlay) {
-      DOM.spiderOverlay.classList.remove('active', 'fade-out');
-    }
-    if (DOM.spiderVideo) {
-      DOM.spiderVideo.pause();
-    }
-    if (audioEffect) {
-      audioEffect.pause();
-    }
-  }
+  /* =========================================================
+     Message
+  ========================================================= */
 
-  // 10. 核心特效播放器 (基于会话锁与 Seek 握手)
-  function playSpiderEffect(clip) {
-    if (!DOM.spiderVideo || !DOM.spiderOverlay) return;
+  function appendMessage(
+    text,
+    mine
+  ) {
 
-    const thisSession = ++activeSessionId;
-    const startTime = clip.start;
-    const endTime = clip.end;
-    const maxDurationMs = ((endTime - startTime) + 0.35) * 1000;
-    const sessionStartTime = performance.now();
+    const row =
+      document.createElement(
+        "div"
+      );
 
-    // 先暂停旧状态并重置图层
-    DOM.spiderVideo.pause();
-    DOM.spiderOverlay.classList.remove('fade-out');
-    DOM.spiderOverlay.classList.remove('active');
 
-    // 音频同步在手势事件流中触发
-    if (soundEnabled && audioEffect) {
-      audioEffect.currentTime = startTime;
-      audioEffect.play().catch(() => {});
-    }
+    row.className =
+      mine
+        ? "message-row me"
+        : "message-row other";
 
-    // 视频强制静音保证 100% 渲染
-    DOM.spiderVideo.muted = true;
-    DOM.spiderVideo.currentTime = startTime;
 
-    let isFrameRunning = false;
+    const bubble =
+      document.createElement(
+        "div"
+      );
 
-    function startPlaybackLoop() {
-      if (thisSession !== activeSessionId) return;
 
-      DOM.spiderOverlay.classList.add('active');
-      const playPromise = DOM.spiderVideo.play();
-      if (playPromise !== undefined) {
-        playPromise.catch((err) => {
-          console.warn('Video render error:', err);
+    bubble.className =
+      mine
+        ? "message-bubble me-bubble"
+        : "message-bubble other-bubble";
+
+
+    bubble.textContent =
+      text;
+
+
+    row.appendChild(
+      bubble
+    );
+
+
+    DOM.messages.appendChild(
+      row
+    );
+
+
+    requestAnimationFrame(
+      () => {
+
+        DOM.messages.scrollTo({
+
+          top:
+            DOM.messages.scrollHeight,
+
+          behavior:
+            "smooth"
+
         });
+
       }
+    );
 
-      isFrameRunning = true;
+  }
 
-      // 帧级高精监听
-      function frameMonitor() {
-        if (thisSession !== activeSessionId) return;
 
-        const curTime = DOM.spiderVideo.currentTime;
-        const elapsedRealTime = performance.now() - sessionStartTime;
+  /* =========================================================
+     Random clip
+  ========================================================= */
 
-        // 到达片段结束前 150ms 开启淡出动画
-        if (curTime >= endTime - 0.15 || elapsedRealTime >= maxDurationMs - 150) {
-          DOM.spiderOverlay.classList.add('fade-out');
-        }
+  function chooseClip() {
 
-        // 到达结束点或超时瞬间物理切断
-        if (curTime >= endTime || elapsedRealTime >= maxDurationMs) {
-          stopSpiderEffect(thisSession);
-          return;
-        }
+    const count =
+      CONFIG.clips.length;
 
-        requestAnimationFrame(frameMonitor);
-      }
 
-      requestAnimationFrame(frameMonitor);
+    if (
+      count === 0
+    ) {
+
+      return 0;
+
     }
 
-    // Seek 握手与超时兜底
-    const onSeeked = () => {
-      DOM.spiderVideo.removeEventListener('seeked', onSeeked);
-      if (!isFrameRunning && thisSession === activeSessionId) {
-        startPlaybackLoop();
+
+    let index =
+      Math.floor(
+        Math.random() * count
+      );
+
+
+    /*
+     * 避免连续两次完全一样
+     */
+
+    if (
+      count > 1 &&
+      index === STATE.currentClip
+    ) {
+
+      index =
+        (index + 1) % count;
+
+    }
+
+
+    STATE.currentClip =
+      index;
+
+
+    return index;
+
+  }
+
+
+  /* =========================================================
+     Stop Egg
+  ========================================================= */
+
+  function stopEgg() {
+
+    STATE.active =
+      false;
+
+
+    DOM.egg.classList.remove(
+      "is-active",
+      "is-ending"
+    );
+
+
+    try {
+
+      DOM.video.pause();
+
+    }
+    catch (_) {}
+
+
+    try {
+
+      DOM.video.removeAttribute(
+        "src"
+      );
+
+      DOM.video.load();
+
+    }
+    catch (_) {}
+
+  }
+
+
+  /* =========================================================
+     Invalidate old session
+  ========================================================= */
+
+  function invalidateSession() {
+
+    STATE.session++;
+
+    STATE.active =
+      false;
+
+    clearTimers();
+
+  }
+
+
+  /* =========================================================
+     Independent clip
+  ========================================================= */
+
+  async function playStandalone(
+    index,
+    session
+  ) {
+
+    const src =
+      CONFIG.clips[index];
+
+
+    DOM.video.src =
+      src;
+
+
+    DOM.video.muted =
+      true;
+
+    DOM.video.defaultMuted =
+      true;
+
+    DOM.video.playsInline =
+      true;
+
+
+    try {
+
+      await DOM.video.play();
+
+    }
+    catch (_) {
+
+      if (
+        session === STATE.session
+      ) {
+
+        stopEgg();
+
+        showToast(
+          "视频播放被浏览器拦截，请重新发送 MJ"
+        );
+
       }
+
+      return;
+
+    }
+
+
+    if (
+      session !==
+      STATE.session
+    ) {
+
+      return;
+
+    }
+
+
+    STATE.active =
+      true;
+
+
+    DOM.egg.classList.add(
+      "is-active"
+    );
+
+
+    monitorStandalone(
+      session
+    );
+
+  }
+
+
+  function monitorStandalone(
+    session
+  ) {
+
+    if (
+      session !==
+      STATE.session ||
+      !STATE.active
+    ) {
+
+      return;
+
+    }
+
+
+    const current =
+      Number(
+        DOM.video.currentTime
+      ) || 0;
+
+
+    const duration =
+      Number(
+        DOM.video.duration
+      ) || 0;
+
+
+    if (
+      duration &&
+      current >=
+        duration -
+        CONFIG.fadeLead /
+        1000
+    ) {
+
+      DOM.egg.classList.add(
+        "is-ending"
+      );
+
+    }
+
+
+    if (
+      DOM.video.ended
+    ) {
+
+      finishEgg(
+        session
+      );
+
+      return;
+
+    }
+
+
+    requestAnimationFrame(
+      () =>
+        monitorStandalone(
+          session
+        )
+    );
+
+  }
+
+
+  /* =========================================================
+     Combined MP4 fallback
+  ========================================================= */
+
+  async function playCombined(
+    index,
+    session
+  ) {
+
+    const segment =
+      CONFIG.combinedSegments[
+        index
+      ];
+
+
+    if (
+      !segment
+    ) {
+
+      return;
+
+    }
+
+
+    const video =
+      DOM.video;
+
+
+    video.src =
+      CONFIG.combined;
+
+
+    video.muted =
+      true;
+
+    video.defaultMuted =
+      true;
+
+    video.playsInline =
+      true;
+
+
+    video.load();
+
+
+    let started =
+      false;
+
+
+    let startClock =
+      performance.now();
+
+
+    const start = async () => {
+
+      if (
+        started ||
+        session !==
+        STATE.session
+      ) {
+
+        return;
+
+      }
+
+
+      started =
+        true;
+
+
+      startClock =
+        performance.now();
+
+
+      DOM.egg.classList.add(
+        "is-active"
+      );
+
+
+      try {
+
+        await video.play();
+
+      }
+      catch (_) {
+
+        stopEgg();
+
+        showToast(
+          "视频播放被浏览器拦截，请重新发送 MJ"
+        );
+
+        return;
+
+      }
+
+
+      monitorCombined(
+        segment,
+        session,
+        startClock
+      );
+
     };
 
-    DOM.spiderVideo.addEventListener('seeked', onSeeked, { once: true });
 
-    // 60ms 极速兜底
-    setTimeout(() => {
-      if (!isFrameRunning && thisSession === activeSessionId) {
-        DOM.spiderVideo.removeEventListener('seeked', onSeeked);
-        startPlaybackLoop();
+    const onSeeked =
+      () => {
+
+        video.removeEventListener(
+          "seeked",
+          onSeeked
+        );
+
+        start();
+
+      };
+
+
+    video.addEventListener(
+      "seeked",
+      onSeeked,
+      {
+        once:
+          true
       }
-    }, 60);
-  }
+    );
 
-  // 11. 消息上屏与机器人互动生成
-  function appendMessage(text, isUser = true) {
-    if (!DOM.chatFlow) return;
 
-    const row = document.createElement('div');
-    row.className = `msg-row ${isUser ? 'user' : 'bot'}`;
-    const bubble = document.createElement('div');
-    bubble.className = 'msg-bubble';
-    bubble.textContent = text;
-    row.appendChild(bubble);
-    DOM.chatFlow.appendChild(row);
+    try {
 
-    DOM.chatFlow.scrollTop = DOM.chatFlow.scrollHeight;
-  }
+      video.currentTime =
+        segment.start;
 
-  // 12. 消息发送核心器 (节流 250ms)
-  function handleSend() {
-    if (isThrottled) return;
-    isThrottled = true;
-    setTimeout(() => { isThrottled = false; }, 250);
-
-    if (!DOM.msgInput) return;
-    const text = DOM.msgInput.value.trim();
-    if (!text) return;
-
-    appendMessage(text, true);
-    DOM.msgInput.value = '';
-
-    // 匹配 mj (大小写不敏感)
-    if (text.toLowerCase().includes('mj')) {
-      triggerHaptic(25);
-      const clip = getNextClip();
-      playSpiderEffect(clip);
-
-      // 模拟互动回复
-      setTimeout(() => {
-        appendMessage(clip.reply, false);
-      }, 700);
     }
+    catch (_) {}
+
+
+    /*
+     * seeked 迟迟不来时的兜底
+     */
+
+    later(
+      () => {
+
+        if (
+          !started &&
+          session ===
+          STATE.session
+        ) {
+
+          video.removeEventListener(
+            "seeked",
+            onSeeked
+          );
+
+          start();
+
+        }
+
+      },
+      90
+    );
+
   }
 
-  // 13. 初始化与事件绑定
-  function setup() {
-    DOM.chatFlow = document.getElementById('chatFlow');
-    DOM.msgInput = document.getElementById('msgInput');
-    DOM.chatForm = document.getElementById('chatForm');
-    DOM.sendBtn = document.getElementById('sendBtn');
-    DOM.spiderOverlay = document.getElementById('spiderOverlay');
-    DOM.spiderVideo = document.getElementById('spiderVideo');
-    DOM.soundToggleBtn = document.getElementById('soundToggleBtn');
-    DOM.soundOnIcon = document.getElementById('soundOnIcon');
-    DOM.soundOffIcon = document.getElementById('soundOffIcon');
-    DOM.toastNotice = document.getElementById('toastNotice');
 
-    initAudioSystem();
+  function monitorCombined(
+    segment,
+    session,
+    startClock
+  ) {
 
-    // 监听视口变化
-    window.addEventListener('resize', syncViewport);
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', syncViewport);
-      window.visualViewport.addEventListener('scroll', syncViewport);
+    if (
+      session !==
+      STATE.session ||
+      !STATE.active
+    ) {
+
+      return;
+
     }
+
+
+    const current =
+      Number(
+        DOM.video.currentTime
+      ) || segment.start;
+
+
+    const elapsed =
+      performance.now() -
+      startClock;
+
+
+    const length =
+      (
+        segment.end -
+        segment.start
+      ) * 1000;
+
+
+    const fadeAt =
+      Math.max(
+        0,
+        length -
+        CONFIG.fadeLead
+      );
+
+
+    if (
+      elapsed >= fadeAt ||
+      current >=
+        segment.end -
+        CONFIG.fadeLead /
+        1000
+    ) {
+
+      DOM.egg.classList.add(
+        "is-ending"
+      );
+
+    }
+
+
+    if (
+      current >=
+        segment.end ||
+      elapsed >=
+        length +
+        CONFIG.fallbackGrace
+    ) {
+
+      finishEgg(
+        session
+      );
+
+      return;
+
+    }
+
+
+    requestAnimationFrame(
+      () =>
+        monitorCombined(
+          segment,
+          session,
+          startClock
+        )
+    );
+
+  }
+
+
+  /* =========================================================
+     Finish
+  ========================================================= */
+
+  function finishEgg(
+    session
+  ) {
+
+    if (
+      session !==
+      STATE.session
+    ) {
+
+      return;
+
+    }
+
+
+    STATE.active =
+      false;
+
+
+    DOM.egg.classList.add(
+      "is-ending"
+    );
+
+
+    later(
+      () => {
+
+        if (
+          session ===
+          STATE.session
+        ) {
+
+          stopEgg();
+
+        }
+
+      },
+      60
+    );
+
+  }
+
+
+  /* =========================================================
+     Trigger
+  ========================================================= */
+
+  async function triggerMJ(
+    index
+  ) {
+
+    const session =
+      ++STATE.session;
+
+
+    clearTimers();
+
+
+    stopEgg();
+
+
+    haptic(
+      18
+    );
+
+
+    if (
+      STATE.standalone[index]
+    ) {
+
+      await playStandalone(
+        index,
+        session
+      );
+
+      return;
+
+    }
+
+
+    if (
+      STATE.combinedReady
+    ) {
+
+      await playCombined(
+        index,
+        session
+      );
+
+      return;
+
+    }
+
+
+    showToast(
+      "请放入 MJ 视频素材"
+    );
+
+  }
+
+
+  /* =========================================================
+     Probe media
+  ========================================================= */
+
+  function probeVideo(
+    src,
+    timeout = 1500
+  ) {
+
+    return new Promise(
+      resolve => {
+
+        const video =
+          document.createElement(
+            "video"
+          );
+
+
+        let finished =
+          false;
+
+
+        const done = ok => {
+
+          if (
+            finished
+          ) {
+
+            return;
+
+          }
+
+
+          finished =
+            true;
+
+
+          clearTimeout(
+            timer
+          );
+
+
+          video.removeAttribute(
+            "src"
+          );
+
+          video.load();
+
+
+          resolve(
+            ok
+          );
+
+        };
+
+
+        const timer =
+          setTimeout(
+            () =>
+              done(false),
+            timeout
+          );
+
+
+        video.preload =
+          "metadata";
+
+        video.muted =
+          true;
+
+
+        video.onloadedmetadata =
+          () =>
+            done(true);
+
+
+        video.onerror =
+          () =>
+            done(false);
+
+
+        video.src =
+          src;
+
+      }
+    );
+
+  }
+
+
+  async function detectAssets() {
+
+    STATE.standalone =
+      await Promise.all(
+        CONFIG.clips.map(
+          clip =>
+            probeVideo(
+              clip
+            )
+        )
+      );
+
+
+    STATE.combinedReady =
+      await probeVideo(
+        CONFIG.combined
+      );
+
+
+    console.log(
+      "[MJ Chat]",
+      {
+        standalone:
+          STATE.standalone,
+
+        combined:
+          STATE.combinedReady
+      }
+    );
+
+  }
+
+
+  /* =========================================================
+     Send
+  ========================================================= */
+
+  function handleSend(
+    event
+  ) {
+
+    event.preventDefault();
+
+
+    const text =
+      DOM.input.value.trim();
+
+
+    if (
+      !text
+    ) {
+
+      return;
+
+    }
+
+
+    DOM.input.value =
+      "";
+
+
+    /*
+     * 先让聊天气泡出现
+     */
+
+    appendMessage(
+      text,
+      true
+    );
+
+
+    /*
+     * 再检测 MJ
+     */
+
+    if (
+      !CONFIG.trigger.test(
+        text
+      )
+    ) {
+
+      return;
+
+    }
+
+
+    const index =
+      chooseClip();
+
+
+    /*
+     * 立即触发
+     */
+
+    triggerMJ(
+      index
+    );
+
+
+    /*
+     * 模拟聊天回复
+
+     * 这里可以删除。
+
+     * 真正仿抖音时，
+     * 不一定需要机器人回复。
+     */
+
+    later(
+
+      () => {
+
+        appendMessage(
+          "🕷️",
+          false
+        );
+
+      },
+
+      550
+
+    );
+
+  }
+
+
+  /* =========================================================
+     Boot
+  ========================================================= */
+
+  function boot() {
+
+    loadSoundPreference();
+
+
     syncViewport();
 
-    // 视频错误容灾监听
-    if (DOM.spiderVideo) {
-      DOM.spiderVideo.addEventListener('error', () => {
-        showToast('⚠️ 视频解码或加载失败，请检查 spider.mp4 资源');
-      });
 
-      // 闲时自动预热预加载
-      setTimeout(() => {
-        DOM.spiderVideo.preload = 'auto';
-        DOM.spiderVideo.load();
-      }, 800);
-    }
+    window.addEventListener(
+      "resize",
+      queueViewportSync,
+      {
+        passive:
+          true
+      }
+    );
 
-    // 事件绑定 (Click / Touch / Submit / Enter)
-    if (DOM.chatForm) {
-      DOM.chatForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        handleSend();
-      });
-    }
 
-    if (DOM.sendBtn) {
-      DOM.sendBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        handleSend();
-      });
-      DOM.sendBtn.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        handleSend();
-      });
-    }
+    if (
+      window.visualViewport
+    ) {
 
-    if (DOM.msgInput) {
-      DOM.msgInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.keyCode === 13) {
-          e.preventDefault();
-          handleSend();
+      window.visualViewport.addEventListener(
+        "resize",
+        queueViewportSync,
+        {
+          passive:
+            true
         }
-      });
+      );
+
+
+      window.visualViewport.addEventListener(
+        "scroll",
+        queueViewportSync,
+        {
+          passive:
+            true
+        }
+      );
+
     }
+
+
+    DOM.sound.addEventListener(
+      "click",
+      toggleSound
+    );
+
+
+    DOM.composer.addEventListener(
+      "submit",
+      handleSend
+    );
+
+
+    DOM.video.addEventListener(
+      "ended",
+      () => {
+
+        if (
+          STATE.active
+        ) {
+
+          finishEgg(
+            STATE.session
+          );
+
+        }
+
+      }
+    );
+
+
+    /*
+     * 页面完成首屏以后再检测视频。
+     */
+
+    setTimeout(
+      detectAssets,
+      0
+    );
+
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', setup);
-  } else {
-    setup();
+
+  if (
+    document.readyState ===
+    "loading"
+  ) {
+
+    document.addEventListener(
+      "DOMContentLoaded",
+      boot,
+      {
+        once:
+          true
+      }
+    );
+
   }
+  else {
+
+    boot();
+
+  }
+
+
 })();
