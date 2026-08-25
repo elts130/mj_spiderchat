@@ -1,188 +1,316 @@
 /**
- * Spider-Man Chat 终极稳定版控制器
- * - 解决 iOS 异步权限拦截导致的无画面问题
- * - 解决白底遮挡与软键盘挤压变形
+ * Spider-Man Chat 终极高可用生产级控制器
+ * 1. 视口适配引擎 (VisualViewport 动态测算)
+ * 2. 音视频解耦体系 (独立 Audio 实例手势提权 + 静音 Video 硬件渲染)
+ * 3. 严格会话状态机 (Session 锁 + Seek 握手 + 时钟双重守卫)
+ * 4. 资源预热与容灾兜底 Toast
  */
 (function () {
   'use strict';
 
-  // 1. 动态视口高度适配 (键盘弹起自动调整)
-  function syncViewport() {
-    const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-    document.documentElement.style.setProperty('--viewport-height', `${height}px`);
-  }
-
-  window.addEventListener('resize', syncViewport);
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', syncViewport);
-    window.visualViewport.addEventListener('scroll', syncViewport);
-  }
-  syncViewport();
-
-  // 2. 精准片段定义：人物露头起播 -> 人物完全离屏退场立即切断
+  // 1. 动作片段精准时间戳定义 (秒)
   const CLIPS = [
-    { id: 0, start: 0.05, end: 2.85 },  // 第 1 款：正上方倒挂滑落 -> 向上收回
-    { id: 1, start: 3.50, end: 6.30 },  // 第 2 款：顶部晃荡穿梭 -> 飞出屏幕
-    { id: 2, start: 7.10, end: 9.90 }   // 第 3 款：近距离俯冲 -> 弹回上方
+    { id: 0, start: 0.05, end: 2.80, reply: '彼得·帕克倒挂路过！🕸️' },
+    { id: 1, start: 3.55, end: 6.30, reply: '呼！荡蛛丝穿梭中！💨' },
+    { id: 2, start: 7.15, end: 9.95, reply: '别怕，好邻居蜘蛛侠在此！🦸‍♂️' }
   ];
 
-  let chatFlow, msgInput, chatForm, sendBtn, spiderOverlay, spiderVideo;
+  // 2. DOM 元素句柄容器
+  const DOM = {
+    chatFlow: null,
+    msgInput: null,
+    chatForm: null,
+    sendBtn: null,
+    spiderOverlay: null,
+    spiderVideo: null,
+    soundToggleBtn: null,
+    soundOnIcon: null,
+    soundOffIcon: null,
+    toastNotice: null
+  };
+
+  // 3. 运行态状态机
   let activeSessionId = 0;
   let lastClipIndex = -1;
-  let repeatCount = 0;
+  let repeatStreak = 0;
   let isThrottled = false;
+  let audioEffect = null;
+  let soundEnabled = true;
 
-  function initElements() {
-    chatFlow = document.getElementById('chatFlow');
-    msgInput = document.getElementById('msgInput');
-    chatForm = document.getElementById('chatForm');
-    sendBtn = document.getElementById('sendBtn');
-    spiderOverlay = document.getElementById('spiderOverlay');
-    spiderVideo = document.getElementById('spiderVideo');
+  // 4. 显示全局 Toast
+  function showToast(msg, duration = 3000) {
+    if (!DOM.toastNotice) return;
+    DOM.toastNotice.textContent = msg;
+    DOM.toastNotice.classList.add('show');
+    setTimeout(() => {
+      DOM.toastNotice.classList.remove('show');
+    }, duration);
   }
 
-  // 随机抽取 (防连抽相同特效)
+  // 5. 动态视口高度测算 (免疫微信/iOS软键盘顶起)
+  function syncViewport() {
+    const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    document.documentElement.style.setProperty('--app-height', `${height}px`);
+  }
+
+  // 6. 音效持久化与切换逻辑
+  function initAudioSystem() {
+    try {
+      const savedPref = localStorage.getItem('spider_chat_sound');
+      if (savedPref !== null) {
+        soundEnabled = savedPref === 'true';
+      }
+    } catch (e) {}
+
+    updateSoundUI();
+
+    // 独立音频实例：复用 spider.mp4 的音轨或独立音效源
+    audioEffect = new Audio('spider.mp4');
+    audioEffect.preload = 'auto';
+
+    if (DOM.soundToggleBtn) {
+      DOM.soundToggleBtn.addEventListener('click', () => {
+        soundEnabled = !soundEnabled;
+        try {
+          localStorage.setItem('spider_chat_sound', String(soundEnabled));
+        } catch (e) {}
+        updateSoundUI();
+        triggerHaptic(10);
+      });
+    }
+  }
+
+  function updateSoundUI() {
+    if (!DOM.soundOnIcon || !DOM.soundOffIcon) return;
+    if (soundEnabled) {
+      DOM.soundOnIcon.classList.remove('hidden');
+      DOM.soundOffIcon.classList.add('hidden');
+    } else {
+      DOM.soundOnIcon.classList.add('hidden');
+      DOM.soundOffIcon.classList.remove('hidden');
+    }
+  }
+
+  // 7. 触觉振动反馈
+  function triggerHaptic(duration = 20) {
+    if (navigator.vibrate) {
+      try { navigator.vibrate(duration); } catch (e) {}
+    }
+  }
+
+  // 8. 伪随机算法 (防连续抽中相同动作)
   function getNextClip() {
     const all = [0, 1, 2];
     let pool = all;
-    if (repeatCount >= 2) {
+    if (repeatStreak >= 2) {
       pool = all.filter(i => i !== lastClipIndex);
     }
     const idx = pool[Math.floor(Math.random() * pool.length)];
     if (idx === lastClipIndex) {
-      repeatCount++;
+      repeatStreak++;
     } else {
       lastClipIndex = idx;
-      repeatCount = 1;
+      repeatStreak = 1;
     }
     return CLIPS[idx];
   }
 
-  // 停止特效并隐藏
+  // 9. 终止并隐藏特效
   function stopSpiderEffect(sessionId) {
     if (sessionId && sessionId !== activeSessionId) return;
-    if (spiderVideo) spiderVideo.pause();
-    if (spiderOverlay) spiderOverlay.classList.remove('active');
+
+    if (DOM.spiderOverlay) {
+      DOM.spiderOverlay.classList.remove('active', 'fade-out');
+    }
+    if (DOM.spiderVideo) {
+      DOM.spiderVideo.pause();
+    }
+    if (audioEffect) {
+      audioEffect.pause();
+    }
   }
 
-  // 核心特效播放逻辑 (同步直拉启动，确保 100% 展现画面)
-  function playSpiderEffect() {
-    if (!spiderVideo || !spiderOverlay) return;
+  // 10. 核心特效播放器 (基于会话锁与 Seek 握手)
+  function playSpiderEffect(clip) {
+    if (!DOM.spiderVideo || !DOM.spiderOverlay) return;
 
-    const currentSession = ++activeSessionId;
-    const clip = getNextClip();
+    const thisSession = ++activeSessionId;
     const startTime = clip.start;
     const endTime = clip.end;
-    const duration = endTime - startTime;
-    const startTimestamp = performance.now();
+    const maxDurationMs = ((endTime - startTime) + 0.35) * 1000;
+    const sessionStartTime = performance.now();
 
-    // 1. 同步设置指针与状态
-    spiderVideo.currentTime = startTime;
-    spiderVideo.muted = false;
-    spiderVideo.volume = 1.0;
-    spiderOverlay.classList.add('active');
+    // 先暂停旧状态并重置图层
+    DOM.spiderVideo.pause();
+    DOM.spiderOverlay.classList.remove('fade-out');
+    DOM.spiderOverlay.classList.remove('active');
 
-    // 2. 主线程同步拉起 play()，保留 iOS 最高手势权限
-    const promise = spiderVideo.play();
-    if (promise !== undefined) {
-      promise.catch(() => {
-        spiderVideo.muted = true; // 降级静音秒起
-        spiderVideo.play();
-      });
+    // 音频同步在手势事件流中触发
+    if (soundEnabled && audioEffect) {
+      audioEffect.currentTime = startTime;
+      audioEffect.play().catch(() => {});
     }
 
-    let seekConfirmed = false;
+    // 视频强制静音保证 100% 渲染
+    DOM.spiderVideo.muted = true;
+    DOM.spiderVideo.currentTime = startTime;
 
-    // 3. 高精帧循环检测 (防异步寻轨误判)
-    function monitorLoop() {
-      if (currentSession !== activeSessionId) return;
+    let isFrameRunning = false;
 
-      const curTime = spiderVideo.currentTime;
-      const elapsed = (performance.now() - startTimestamp) / 1000;
+    function startPlaybackLoop() {
+      if (thisSession !== activeSessionId) return;
 
-      // 确认时间指针已成功跳至当前片段附近
-      if (!seekConfirmed) {
-        if (Math.abs(curTime - startTime) < 0.6 || elapsed > 0.15) {
-          seekConfirmed = true;
-        }
+      DOM.spiderOverlay.classList.add('active');
+      const playPromise = DOM.spiderVideo.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn('Video render error:', err);
+        });
       }
 
-      // 仅在确认进入片段后，到达结束点或达到动作时长瞬间关闭
-      if (seekConfirmed) {
-        if (curTime >= endTime || elapsed >= duration + 0.3) {
-          stopSpiderEffect(currentSession);
+      isFrameRunning = true;
+
+      // 帧级高精监听
+      function frameMonitor() {
+        if (thisSession !== activeSessionId) return;
+
+        const curTime = DOM.spiderVideo.currentTime;
+        const elapsedRealTime = performance.now() - sessionStartTime;
+
+        // 到达片段结束前 150ms 开启淡出动画
+        if (curTime >= endTime - 0.15 || elapsedRealTime >= maxDurationMs - 150) {
+          DOM.spiderOverlay.classList.add('fade-out');
+        }
+
+        // 到达结束点或超时瞬间物理切断
+        if (curTime >= endTime || elapsedRealTime >= maxDurationMs) {
+          stopSpiderEffect(thisSession);
           return;
         }
+
+        requestAnimationFrame(frameMonitor);
       }
 
-      requestAnimationFrame(monitorLoop);
+      requestAnimationFrame(frameMonitor);
     }
 
-    requestAnimationFrame(monitorLoop);
+    // Seek 握手与超时兜底
+    const onSeeked = () => {
+      DOM.spiderVideo.removeEventListener('seeked', onSeeked);
+      if (!isFrameRunning && thisSession === activeSessionId) {
+        startPlaybackLoop();
+      }
+    };
+
+    DOM.spiderVideo.addEventListener('seeked', onSeeked, { once: true });
+
+    // 60ms 极速兜底
+    setTimeout(() => {
+      if (!isFrameRunning && thisSession === activeSessionId) {
+        DOM.spiderVideo.removeEventListener('seeked', onSeeked);
+        startPlaybackLoop();
+      }
+    }, 60);
   }
 
-  // 消息发送核心
+  // 11. 消息上屏与机器人互动生成
+  function appendMessage(text, isUser = true) {
+    if (!DOM.chatFlow) return;
+
+    const row = document.createElement('div');
+    row.className = `msg-row ${isUser ? 'user' : 'bot'}`;
+    const bubble = document.createElement('div');
+    bubble.className = 'msg-bubble';
+    bubble.textContent = text;
+    row.appendChild(bubble);
+    DOM.chatFlow.appendChild(row);
+
+    DOM.chatFlow.scrollTop = DOM.chatFlow.scrollHeight;
+  }
+
+  // 12. 消息发送核心器 (节流 250ms)
   function handleSend() {
     if (isThrottled) return;
     isThrottled = true;
-    setTimeout(() => { isThrottled = false; }, 80);
+    setTimeout(() => { isThrottled = false; }, 250);
 
-    if (!msgInput || !chatFlow) initElements();
-    if (!msgInput) return;
-
-    const text = msgInput.value.trim();
+    if (!DOM.msgInput) return;
+    const text = DOM.msgInput.value.trim();
     if (!text) return;
 
-    // 1. 上屏渲染气泡
-    try {
-      const row = document.createElement('div');
-      row.className = 'msg-row';
-      const bubble = document.createElement('div');
-      bubble.className = 'msg-bubble';
-      bubble.textContent = text;
-      row.appendChild(bubble);
-      chatFlow.appendChild(row);
+    appendMessage(text, true);
+    DOM.msgInput.value = '';
 
-      msgInput.value = '';
-      chatFlow.scrollTop = chatFlow.scrollHeight;
-    } catch (err) {
-      console.error(err);
-    }
-
-    // 2. 匹配 mj / MJ / Mj / mJ
+    // 匹配 mj (大小写不敏感)
     if (text.toLowerCase().includes('mj')) {
-      playSpiderEffect();
+      triggerHaptic(25);
+      const clip = getNextClip();
+      playSpiderEffect(clip);
+
+      // 模拟互动回复
+      setTimeout(() => {
+        appendMessage(clip.reply, false);
+      }, 700);
     }
   }
 
-  // 全局事件监听
+  // 13. 初始化与事件绑定
   function setup() {
-    initElements();
+    DOM.chatFlow = document.getElementById('chatFlow');
+    DOM.msgInput = document.getElementById('msgInput');
+    DOM.chatForm = document.getElementById('chatForm');
+    DOM.sendBtn = document.getElementById('sendBtn');
+    DOM.spiderOverlay = document.getElementById('spiderOverlay');
+    DOM.spiderVideo = document.getElementById('spiderVideo');
+    DOM.soundToggleBtn = document.getElementById('soundToggleBtn');
+    DOM.soundOnIcon = document.getElementById('soundOnIcon');
+    DOM.soundOffIcon = document.getElementById('soundOffIcon');
+    DOM.toastNotice = document.getElementById('toastNotice');
 
-    if (spiderVideo) {
-      spiderVideo.addEventListener('ended', () => stopSpiderEffect());
+    initAudioSystem();
+
+    // 监听视口变化
+    window.addEventListener('resize', syncViewport);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', syncViewport);
+      window.visualViewport.addEventListener('scroll', syncViewport);
+    }
+    syncViewport();
+
+    // 视频错误容灾监听
+    if (DOM.spiderVideo) {
+      DOM.spiderVideo.addEventListener('error', () => {
+        showToast('⚠️ 视频解码或加载失败，请检查 spider.mp4 资源');
+      });
+
+      // 闲时自动预热预加载
+      setTimeout(() => {
+        DOM.spiderVideo.preload = 'auto';
+        DOM.spiderVideo.load();
+      }, 800);
     }
 
-    if (chatForm) {
-      chatForm.addEventListener('submit', (e) => {
+    // 事件绑定 (Click / Touch / Submit / Enter)
+    if (DOM.chatForm) {
+      DOM.chatForm.addEventListener('submit', (e) => {
         e.preventDefault();
         handleSend();
       });
     }
 
-    if (sendBtn) {
-      sendBtn.addEventListener('click', (e) => {
+    if (DOM.sendBtn) {
+      DOM.sendBtn.addEventListener('click', (e) => {
         e.preventDefault();
         handleSend();
       });
-      sendBtn.addEventListener('touchend', (e) => {
+      DOM.sendBtn.addEventListener('touchend', (e) => {
         e.preventDefault();
         handleSend();
       });
     }
 
-    if (msgInput) {
-      msgInput.addEventListener('keydown', (e) => {
+    if (DOM.msgInput) {
+      DOM.msgInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.keyCode === 13) {
           e.preventDefault();
           handleSend();
