@@ -57,14 +57,13 @@ body {
   color: #000000;
 }
 
-/* ================= 蜘蛛侠特效图层 (置顶且免疫键盘压缩) ================= */
+/* ================= 蜘蛛侠特效图层 (置顶 + 纯净正片叠底) ================= */
 .spiderman-overlay {
   position: absolute;
-  top: calc(44px + env(safe-area-inset-top)); /* 紧贴顶部导航下方 */
+  top: calc(44px + env(safe-area-inset-top));
   left: 0;
-  right: 0;
   width: 100%;
-  z-index: 20; /* 高于消息流(1)，低于输入栏(30) */
+  z-index: 20;
   pointer-events: none;
   display: none;
   justify-content: center;
@@ -75,15 +74,14 @@ body {
   display: flex;
 }
 
-/* 正片叠底核心：彻底消除白色背景方块，气泡与文字完美透过 */
 .spiderman-video {
-  width: 88%;
+  width: 85%;
   max-width: 360px;
   height: auto;
   object-fit: contain;
   object-position: top center;
   pointer-events: none;
-  mix-blend-mode: multiply;
+  mix-blend-mode: multiply; /* 彻底剔除白底，文字与气泡完全透出 */
   background: transparent;
 }
 
@@ -172,6 +170,7 @@ body {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  touch-action: manipulation;
   flex-shrink: 0;
   transition: transform 0.15s ease;
 }
