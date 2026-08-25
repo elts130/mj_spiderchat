@@ -1,13 +1,15 @@
 /**
- * 抖音同款蜘蛛侠特效控制器 (WebKit 异步寻轨状态锁与 100% 触发修复版)
+ * 抖音同款蜘蛛侠特效控制器 (Canvas 硬件投影 + 零延迟秒级响应)
  */
 const chatFlow = document.getElementById('chatFlow');
 const msgInput = document.getElementById('msgInput');
 const chatForm = document.getElementById('chatForm');
 const spiderOverlay = document.getElementById('spiderOverlay');
+const spiderCanvas = document.getElementById('spiderCanvas');
 const spiderVideo = document.getElementById('spiderVideo');
+const ctx = spiderCanvas.getContext('2d');
 
-// 毫秒级精准片段定义
+// 毫秒级精准动作片段定义
 const clips = [
   { id: 0, start: 0.0, end: 3.2 },   // 第 1 款：正上方倒挂滑落
   { id: 1, start: 3.6, end: 6.8 },   // 第 2 款：顶部穿梭晃荡
@@ -17,6 +19,7 @@ const clips = [
 let currentClipStart = 0;
 let currentClipEnd = 0;
 let isPlaying = false;
+let isSeeking = false;
 let animFrameId = null;
 
 let lastClipIndex = -1;
@@ -42,7 +45,7 @@ function getNextClip() {
   return clips[chosenIndex];
 }
 
-// 停止当前特效并隐藏
+// 停止特效并清空画布
 function stopSpiderEffect() {
   isPlaying = false;
   if (animFrameId) {
@@ -51,79 +54,76 @@ function stopSpiderEffect() {
   }
   spiderVideo.pause();
   spiderOverlay.classList.remove('active');
+  ctx.clearRect(0, 0, spiderCanvas.width, spiderCanvas.height);
 }
 
-// 高精帧监听 (增加时间窗口双重校验，彻底防止 iOS 异步时间差误杀)
-function checkFrame() {
+// Canvas 逐帧投影渲染与结束判断
+function renderFrame() {
   if (!isPlaying) return;
+
+  // 将解码后的视频帧实时绘制到 Canvas 上
+  if (spiderVideo.videoWidth > 0) {
+    if (spiderCanvas.width !== spiderVideo.videoWidth) {
+      spiderCanvas.width = spiderVideo.videoWidth;
+      spiderCanvas.height = spiderVideo.videoHeight;
+    }
+    ctx.drawImage(spiderVideo, 0, 0, spiderCanvas.width, spiderCanvas.height);
+  }
 
   const curTime = spiderVideo.currentTime;
 
-  // 必须同时满足：当前时间已进入该片段，并且已达到片段结束点
-  if (curTime >= currentClipStart && curTime >= currentClipEnd) {
+  // 动作一结束（离开视野）瞬间关闭
+  if (!isSeeking && curTime >= currentClipEnd) {
     stopSpiderEffect();
     return;
   }
 
-  animFrameId = requestAnimationFrame(checkFrame);
+  animFrameId = requestAnimationFrame(renderFrame);
 }
 
-// 执行实际播放
-function executePlay() {
-  spiderOverlay.classList.add('active');
-  isPlaying = true;
-
-  const playPromise = spiderVideo.play();
-  if (playPromise !== undefined) {
-    playPromise.then(() => {
-      animFrameId = requestAnimationFrame(checkFrame);
-    }).catch(() => {
-      // 兼容手机静音策略
-      spiderVideo.muted = true;
-      spiderVideo.play().then(() => {
-        animFrameId = requestAnimationFrame(checkFrame);
-      });
-    });
-  }
-}
-
-// 触发特效 (加入 WebKit seeked 寻轨完成锁)
+// 零延迟触发播放 (同步执行，保留 iOS 权限)
 function playSpiderEffect() {
-  stopSpiderEffect();
+  if (animFrameId) {
+    cancelAnimationFrame(animFrameId);
+    animFrameId = null;
+  }
 
-  const selectedClip = getNextClip();
-  currentClipStart = selectedClip.start;
-  currentClipEnd = selectedClip.end;
+  const clip = getNextClip();
+  currentClipStart = clip.start;
+  currentClipEnd = clip.end;
 
+  // 设置安全寻轨保护，防止时间差误判
+  isSeeking = true;
+  spiderVideo.currentTime = clip.start;
   spiderVideo.muted = false;
   spiderVideo.volume = 1.0;
 
-  let hasExecuted = false;
+  spiderOverlay.classList.add('active');
+  isPlaying = true;
 
-  // 监听定位完成事件，确保指针确实跳到了新片段起始点
-  const onSeeked = () => {
-    if (hasExecuted) return;
-    hasExecuted = true;
-    spiderVideo.removeEventListener('seeked', onSeeked);
-    executePlay();
-  };
+  // 立即在主线程同步调用 play()，保留移动端音频手势权限
+  const playPromise = spiderVideo.play();
+  if (playPromise !== undefined) {
+    playPromise.then(() => {
+      // 播放成功
+    }).catch(() => {
+      // 若系统策略限制有声播放，降级为静音秒播
+      spiderVideo.muted = true;
+      spiderVideo.play();
+    });
+  }
 
-  spiderVideo.addEventListener('seeked', onSeeked, { once: true });
-  spiderVideo.currentTime = selectedClip.start;
-
-  // 极速兜底保护 (防止某些安卓机型不抛出 seeked 事件)
+  // 100ms 后开启结束检测
   setTimeout(() => {
-    if (!hasExecuted) {
-      hasExecuted = true;
-      spiderVideo.removeEventListener('seeked', onSeeked);
-      executePlay();
-    }
-  }, 80);
+    isSeeking = false;
+  }, 100);
+
+  animFrameId = requestAnimationFrame(renderFrame);
 }
 
 spiderVideo.addEventListener('ended', stopSpiderEffect);
 
-// 消息发送与触发
+// 消息发送入口
 function handleSend() {
   const text = msgInput.value.trim();
   if (!text) return;
@@ -139,7 +139,7 @@ function handleSend() {
   msgInput.value = '';
   chatFlow.scrollTop = chatFlow.scrollHeight;
 
-  // 发送 mj 每次必出特效，支持快速连续连发
+  // 发送包含 mj 立即触发
   if (text.toLowerCase().includes('mj')) {
     playSpiderEffect();
   }
