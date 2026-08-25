@@ -17,6 +17,17 @@ body {
   overflow: hidden;
 }
 
+/* ================= 隐藏式解码源 (视口外维持解码) ================= */
+.video-source {
+  position: fixed;
+  top: -9999px;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* ================= 聊天视窗主容器 ================= */
 .chat-container {
   width: 100%;
@@ -57,7 +68,7 @@ body {
   color: #000000;
 }
 
-/* ================= 蜘蛛侠特效图层 (置顶 + 纯净正片叠底) ================= */
+/* ================= 蜘蛛侠特效图层 (置顶且正片叠底透字) ================= */
 .spiderman-overlay {
   position: absolute;
   top: calc(44px + env(safe-area-inset-top));
@@ -74,14 +85,15 @@ body {
   display: flex;
 }
 
-.spiderman-video {
+/* Canvas 混合模式：利用硬件加速实现纯净正片叠底，彻底剔除白底色差 */
+.spiderman-canvas {
   width: 85%;
   max-width: 360px;
   height: auto;
-  object-fit: contain;
-  object-position: top center;
+  display: block;
   pointer-events: none;
-  mix-blend-mode: multiply; /* 彻底剔除白底，文字与气泡完全透出 */
+  mix-blend-mode: multiply; /* 正片叠底：白底全透，文字完全透出 */
+  filter: contrast(1.18) brightness(1.03); /* 压实纯白边缘，消除压缩噪点灰边 */
   background: transparent;
 }
 
