@@ -4,7 +4,7 @@
   margin: 0;
   padding: 0;
   -webkit-tap-highlight-color: transparent;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
 }
 
 body {
@@ -15,7 +15,40 @@ body {
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  position: relative;
+}
+
+/* ================= 蜘蛛侠特效图层 (固定视口顶部，防软键盘压缩) ================= */
+.spiderman-overlay {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px;
+  height: 100vh;
+  height: 100dvh;
+  z-index: 9999;
+  pointer-events: none;
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.spiderman-overlay.active {
+  display: flex;
+}
+
+.spiderman-video {
+  width: 100%;
+  height: auto;
+  max-height: 70vh;
+  object-fit: contain;
+  object-position: top center;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+  filter: contrast(1.08) brightness(1.03);
 }
 
 /* ================= 聊天视窗容器 ================= */
@@ -23,7 +56,7 @@ body {
   width: 100%;
   max-width: 480px;
   height: 100%;
-  background: #ffffff;
+  background: #f7f7f8;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -35,19 +68,37 @@ body {
     height: 92vh;
     max-height: 880px;
     border-radius: 36px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.03);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.06);
     border: 1px solid rgba(0, 0, 0, 0.04);
   }
+}
+
+/* ================= 顶部导航条 ================= */
+.chat-header {
+  padding-top: calc(8px + env(safe-area-inset-top));
+  padding-bottom: 10px;
+  text-align: center;
+  background: rgba(247, 247, 248, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.08);
+  z-index: 10;
+}
+
+.header-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #000000;
 }
 
 /* ================= 消息流区域 ================= */
 .chat-flow {
   flex: 1;
-  padding: 24px 16px;
+  padding: 16px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   z-index: 1;
@@ -65,77 +116,59 @@ body {
 
 .msg-bubble {
   max-width: 78%;
-  padding: 12px 18px;
-  border-radius: 22px;
+  padding: 10px 16px;
+  border-radius: 18px;
   font-size: 16px;
-  letter-spacing: -0.2px;
-  line-height: 1.45;
+  line-height: 1.4;
   word-break: break-word;
-  background: linear-gradient(135deg, #007aff 0%, #0062d2 100%);
+  background: #2563eb;
   color: #ffffff;
-  border-bottom-right-radius: 5px;
-  box-shadow: 0 4px 16px rgba(0, 122, 255, 0.22);
-  font-weight: 500;
-  animation: bubblePop 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  border-bottom-right-radius: 4px;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
+  animation: bubblePop 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 @keyframes bubblePop {
-  0% {
-    opacity: 0;
-    transform: translateY(10px) scale(0.92);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+  0% { opacity: 0; transform: translateY(8px) scale(0.95); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 /* ================= 底部输入栏 ================= */
 .chat-bar {
-  padding: 12px 16px;
-  padding-bottom: calc(14px + env(safe-area-inset-bottom));
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  padding: 10px 14px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  background: #ffffff;
+  border-top: 0.5px solid rgba(0, 0, 0, 0.08);
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
-  z-index: 30;
+  z-index: 20;
 }
 
 .input-container {
   flex: 1;
-  position: relative;
 }
 
 .chat-bar input {
   width: 100%;
-  background: #f1f2f6;
-  border: 1.5px solid transparent;
-  padding: 12px 20px;
-  border-radius: 26px;
-  color: #1c1c1e;
+  background: #f1f2f5;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 20px;
+  color: #000000;
   font-size: 16px;
   outline: none;
   -webkit-appearance: none;
-  transition: all 0.25s ease;
-}
-
-.chat-bar input::placeholder {
-  color: #8e8e93;
 }
 
 .chat-bar input:focus {
-  background: #ffffff;
-  border-color: #007aff;
-  box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.12);
+  background: #eaecef;
 }
 
 .chat-bar button {
-  width: 44px;
-  height: 44px;
-  background: linear-gradient(135deg, #007aff 0%, #0062d2 100%);
+  width: 40px;
+  height: 40px;
+  background: #2563eb;
   border: none;
   color: #ffffff;
   border-radius: 50%;
@@ -143,42 +176,10 @@ body {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  user-select: none;
-  -webkit-appearance: none;
-  box-shadow: 0 4px 14px rgba(0, 122, 255, 0.28);
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
   flex-shrink: 0;
+  transition: transform 0.15s ease;
 }
 
 .chat-bar button:active {
-  transform: scale(0.9);
-}
-
-/* ================= 蜘蛛侠特效图层 (顶部触发优化) ================= */
-.spiderman-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 20;
-  pointer-events: none;
-  display: none;
-  align-items: flex-start; /* 关键：固定在最上方触发 */
-  justify-content: center;
-  background: transparent;
-}
-
-.spiderman-overlay.active {
-  display: flex;
-}
-
-.spiderman-video {
-  width: 100%;
-  height: 75%; /* 保证上半部分完整呈现蜘蛛侠动作 */
-  object-fit: contain;
-  object-position: top center; /* 关键：视频画面顶部居中对齐 */
-  pointer-events: none;
-  mix-blend-mode: multiply; /* 消除背景矩形色块 */
-  filter: contrast(1.08) brightness(1.04);
+  transform: scale(0.92);
 }
