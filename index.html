@@ -2,37 +2,50 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <!-- 新增 interactive-widget=resizes-content 完美适配 iOS15+ 键盘弹起 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
   <meta name="theme-color" content="#f7f7f8" />
   <title>Spider-Man Chat</title>
-  <link rel="stylesheet" href="style.css?v=max_1.0" />
+  <link rel="stylesheet" href="style.css?v=6.0" />
 </head>
 <body>
 
+  <!-- 隐藏的原始视频源 (放置在 DOM 中确保后台解码，但不显示) -->
+  <div class="video-decoder-box">
+    <video 
+      id="spiderVideo" 
+      playsinline
+      webkit-playsinline
+      x5-playsinline
+      preload="auto"
+      muted
+    >
+      <source src="spider.mp4" type="video/mp4">
+      <source src="293_raw.mov" type="video/quicktime">
+    </video>
+  </div>
+
   <div class="app-wrapper">
+    <!-- 聊天主容器 (动态视口自适应) -->
     <main class="chat-container" id="chatContainer">
+      
+      <!-- 顶部导航条 -->
       <header class="chat-header">
         <div class="header-title">聊天</div>
       </header>
 
+      <!-- 蜘蛛侠特效悬挂层 (基于 Canvas 物理抠图，100% 透明透字) -->
       <div class="spiderman-overlay" id="spiderOverlay" aria-hidden="true">
-        <video 
-          id="spiderVideo" 
-          class="spiderman-video"
-          playsinline
-          webkit-playsinline
-          x5-playsinline
-          preload="auto"
-        >
-          <source src="spider.mp4" type="video/mp4">
-          <source src="293_raw.mov" type="video/quicktime">
-        </video>
+        <canvas id="spiderCanvas" class="spiderman-canvas"></canvas>
       </div>
 
+      <!-- 消息流区域 -->
       <section class="chat-flow" id="chatFlow" aria-live="polite"></section>
 
+      <!-- 底部输入栏 -->
       <form class="chat-bar" id="chatForm">
         <div class="input-container">
+          <!-- 强制 16px 杜绝 iOS 自动放大陷阱 -->
           <input 
             type="text" 
             id="msgInput" 
@@ -49,9 +62,10 @@
           </svg>
         </button>
       </form>
+      
     </main>
   </div>
 
-  <script src="script.js?v=max_1.0"></script>
+  <script src="script.js?v=6.0"></script>
 </body>
 </html>
