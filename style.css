@@ -1,7 +1,8 @@
 :root {
 
-  --h:
-    100dvh;
+  --app-height: 100vh;
+
+  --keyboard-height: 0px;
 
   --safe-top:
     env(
@@ -15,11 +16,11 @@
       0px
     );
 
-  --blue:
-    #fe2c55;
-
   --bg:
     #f7f7f8;
+
+  --blue:
+    #fe2c55;
 
   --line:
     rgba(
@@ -29,6 +30,20 @@
       .07
     );
 
+  /*
+   * 特效相对屏幕大小。
+   *
+   * 512 原素材本身会包含较多留白，
+   * 所以这里让整个画布接近手机宽度，
+   * 蜘蛛侠实际人物会自然落在一个
+   * 类似抖音彩蛋的视觉比例。
+   */
+
+  --effect-size:
+    min(
+      100vw,
+      430px
+    );
 }
 
 
@@ -50,39 +65,46 @@ body {
   margin:
     0;
 
+  padding:
+    0;
+
   overflow:
     hidden;
 
+  background:
+    #e9e9ec;
+
+  overscroll-behavior:
+    none;
 }
 
 
 body {
 
+  position:
+    fixed;
+
+  inset:
+    0;
+
   font-family:
     -apple-system,
     BlinkMacSystemFont,
     "SF Pro Text",
+    "SF Pro Display",
     "PingFang SC",
     "Helvetica Neue",
     Arial,
     sans-serif;
 
-  background:
-    #e8e8eb;
-
-  color:
-    #111;
-
   -webkit-font-smoothing:
     antialiased;
-
 }
 
 
 button,
 input {
-  font:
-    inherit;
+  font: inherit;
 }
 
 
@@ -93,24 +115,26 @@ button {
 
   -webkit-tap-highlight-color:
     transparent;
-
 }
 
 
-/* ========================================
-   主容器
-======================================== */
+/* =========================================
+   页面
+========================================= */
 
 .app {
 
   position:
-    relative;
+    fixed;
+
+  inset:
+    0;
 
   width:
     100%;
 
   height:
-    var(--h);
+    var(--app-height);
 
   max-width:
     520px;
@@ -130,6 +154,8 @@ button {
   background:
     var(--bg);
 
+  transform:
+    translateZ(0);
 }
 
 
@@ -148,22 +174,13 @@ button {
 
   .app {
 
+    position:
+      relative;
+
     height:
       min(
         900px,
         92vh
-      );
-
-    border-radius:
-      24px;
-
-    box-shadow:
-      0 25px 70px
-      rgba(
-        0,
-        0,
-        0,
-        .15
       );
 
     border:
@@ -175,16 +192,36 @@ button {
         .08
       );
 
+    border-radius:
+      24px;
+
+    box-shadow:
+      0
+      25px
+      70px
+      rgba(
+        0,
+        0,
+        0,
+        .15
+      );
+
   }
 
 }
 
 
-/* ========================================
-   顶部
-======================================== */
+/* =========================================
+   顶部栏
+========================================= */
 
 .topbar {
+
+  position:
+    relative;
+
+  flex:
+    0 0 auto;
 
   height:
     calc(
@@ -196,9 +233,6 @@ button {
     var(--safe-top)
     10px
     0;
-
-  flex:
-    0 0 auto;
 
   display:
     grid;
@@ -216,27 +250,29 @@ button {
       255,
       255,
       255,
-      .96
+      .97
     );
-
-  backdrop-filter:
-    blur(18px);
-
-  -webkit-backdrop-filter:
-    blur(18px);
 
   border-bottom:
     1px solid
     var(--line);
 
-  z-index:
-    20;
+  backdrop-filter:
+    blur(
+      18px
+    );
 
+  -webkit-backdrop-filter:
+    blur(
+      18px
+    );
+
+  z-index:
+    50;
 }
 
 
-.back,
-.more {
+.icon-btn {
 
   width:
     40px;
@@ -251,7 +287,25 @@ button {
     transparent;
 
   color:
-    #111;
+    #222;
+
+  display:
+    grid;
+
+  place-items:
+    center;
+}
+
+
+.icon-btn:active {
+
+  background:
+    rgba(
+      0,
+      0,
+      0,
+      .06
+    );
 
 }
 
@@ -267,7 +321,7 @@ button {
 .more {
 
   font-size:
-    18px;
+    16px;
 
   letter-spacing:
     2px;
@@ -310,51 +364,54 @@ button {
     #111;
 
   color:
-    white;
+    #fff;
+
+  font-weight:
+    800;
 
   font-size:
     14px;
 
-  font-weight:
-    700;
-
 }
 
 
-.person-info {
+.person-copy {
 
   margin-left:
     9px;
 
+  display:
+    flex;
+
+  flex-direction:
+    column;
+
 }
 
 
-.name {
+.person-copy strong {
 
   font-size:
     15px;
 
-  font-weight:
-    650;
-
 }
 
 
-.status {
+.person-copy span {
 
   margin-top:
     3px;
 
+  color:
+    #8b8b90;
+
   font-size:
     11px;
-
-  color:
-    #888;
 
 }
 
 
-.status i {
+.person-copy i {
 
   display:
     inline-block;
@@ -365,21 +422,21 @@ button {
   height:
     6px;
 
-  margin-right:
-    4px;
-
   border-radius:
     50%;
 
   background:
-    #31c46d;
+    #35c46d;
+
+  margin-right:
+    4px;
 
 }
 
 
-/* ========================================
-   聊天背景
-======================================== */
+/* =========================================
+   聊天
+========================================= */
 
 .chat {
 
@@ -387,18 +444,20 @@ button {
     relative;
 
   flex:
-    1;
+    1 1 auto;
 
   min-height:
     0;
 
   overflow:
     hidden;
-
 }
 
 
 .messages {
+
+  width:
+    100%;
 
   height:
     100%;
@@ -409,40 +468,58 @@ button {
   padding:
     14px
     14px
-    20px;
+    86px;
+
+  display:
+    flex;
+
+  flex-direction:
+    column;
+
+  gap:
+    8px;
 
   -webkit-overflow-scrolling:
     touch;
 
+  overscroll-behavior:
+    contain;
+
+  scrollbar-width:
+    none;
 }
 
 
 .messages::-webkit-scrollbar {
+
   display:
     none;
 }
 
 
-.date {
+.date-chip {
 
-  width:
-    max-content;
+  align-self:
+    center;
 
   margin:
-    4px auto 12px;
+    5px
+    0
+    8px;
 
   padding:
-    4px 8px;
+    4px
+    8px;
 
   border-radius:
-    10px;
+    11px;
 
   background:
     rgba(
       0,
       0,
       0,
-      .05
+      .045
     );
 
   color:
@@ -450,20 +527,20 @@ button {
 
   font-size:
     11px;
-
 }
 
 
 .hint {
 
-  width:
-    max-content;
+  align-self:
+    center;
 
-  margin:
-    0 auto;
+  margin-top:
+    0;
 
   padding:
-    7px 10px;
+    6px
+    9px;
 
   border-radius:
     12px;
@@ -473,21 +550,20 @@ button {
       0,
       0,
       0,
-      .04
+      .035
     );
 
   color:
-    #aaa;
+    #a0a0a5;
 
   font-size:
     12px;
-
 }
 
 
-/* ========================================
-   MJ 消息
-======================================== */
+/* =========================================
+   MJ 气泡
+========================================= */
 
 .row {
 
@@ -498,8 +574,8 @@ button {
     flex-end;
 
   margin:
-    7px 0;
-
+    3px
+    0;
 }
 
 
@@ -509,19 +585,20 @@ button {
     82%;
 
   padding:
-    9px 13px;
+    9px
+    13px;
 
   border-radius:
+    18px
+    18px
+    5px
     18px;
 
-  border-bottom-right-radius:
-    5px;
-
   background:
-    #fe2c55;
+    var(--blue);
 
   color:
-    white;
+    #fff;
 
   font-size:
     15px;
@@ -531,9 +608,19 @@ button {
 
   animation:
     bubble-in
-    .16s
+    .15s
     ease-out;
 
+  box-shadow:
+    0
+    1px
+    2px
+    rgba(
+      0,
+      0,
+      0,
+      .05
+    );
 }
 
 
@@ -545,8 +632,12 @@ button {
       0;
 
     transform:
-      translateY(5px)
-      scale(.98);
+      translateY(
+        4px
+      )
+      scale(
+        .985
+      );
 
   }
 
@@ -563,26 +654,35 @@ button {
 }
 
 
-/* ========================================
-   蜘蛛侠特效
-======================================== */
+/* =========================================
+   MJ 特效
+========================================= */
 
-.egg {
+.effect-layer {
 
   position:
     absolute;
 
-  inset:
-    0 0 auto 0;
+  left:
+    0;
+
+  right:
+    0;
+
+  top:
+    0;
 
   height:
     min(
-      390px,
-      58%
+      410px,
+      65%
     );
 
   z-index:
-    10;
+    30;
+
+  pointer-events:
+    none;
 
   display:
     flex;
@@ -593,24 +693,22 @@ button {
   align-items:
     flex-start;
 
-  pointer-events:
-    none;
-
   visibility:
     hidden;
 
   opacity:
     0;
 
-  transition:
-    opacity
-    .04s
-    linear;
+  overflow:
+    visible;
 
+  contain:
+    layout
+    paint;
 }
 
 
-.egg.show {
+.effect-layer.show {
 
   visibility:
     visible;
@@ -621,61 +719,104 @@ button {
 }
 
 
-.egg.hide {
+.effect-layer.hide {
+
+  visibility:
+    visible;
 
   opacity:
     0;
 
+  transition:
+    opacity
+    70ms
+    linear;
 }
 
 
-.effect {
+/*
+ * Canvas 才是真正显示给用户的内容。
+ *
+ * 原视频本身被藏起来，
+ * 所以绝不会再出现灰色方块。
+ */
+
+#effectCanvas {
+
+  position:
+    absolute;
+
+  left:
+    50%;
+
+  top:
+    -24px;
+
+  width:
+    var(--effect-size);
+
+  height:
+    var(--effect-size);
+
+  transform:
+    translateX(
+      -50%
+    );
 
   display:
     block;
 
-  width:
-    100%;
-
-  max-width:
-    512px;
-
-  height:
-    auto;
-
-  max-height:
-    390px;
-
-  object-fit:
-    contain;
-
-  object-position:
-    top center;
-
-  background:
-    transparent;
-
-  /*
-   * 你的素材背景是浅色。
-   *
-   * multiply 可以让白色/浅色背景
-   * 尽量与网页背景融合。
-   */
-
-  mix-blend-mode:
-    multiply;
-
-  transform:
-    translateZ(0);
-
 }
 
 
-/* ========================================
+/*
+ * 原视频只负责提供画面和声音。
+ *
+ * 不参与视觉显示。
+ */
+
+#effectVideo {
+
+  position:
+    absolute;
+
+  width:
+    1px;
+
+  height:
+    1px;
+
+  left:
+    -100px;
+
+  top:
+    -100px;
+
+  opacity:
+    .001;
+
+  pointer-events:
+    none;
+}
+
+
+/* =========================================
    输入栏
-======================================== */
+========================================= */
 
 .composer {
+
+  position:
+    absolute;
+
+  left:
+    0;
+
+  right:
+    0;
+
+  bottom:
+    var(--keyboard-height);
 
   height:
     calc(
@@ -688,9 +829,6 @@ button {
     10px
     var(--safe-bottom);
 
-  flex:
-    0 0 auto;
-
   display:
     flex;
 
@@ -701,15 +839,19 @@ button {
     8px;
 
   background:
-    white;
+    #fff;
 
   border-top:
     1px solid
     var(--line);
 
   z-index:
-    20;
+    60;
 
+  transition:
+    bottom
+    60ms
+    ease-out;
 }
 
 
@@ -733,6 +875,8 @@ button {
   font-size:
     23px;
 
+  flex:
+    0 0 auto;
 }
 
 
@@ -760,10 +904,18 @@ button {
     #f0f0f2;
 
   padding:
-    0 15px;
+    0
+    15px;
 
   font-size:
     16px;
+}
+
+
+.composer input:focus {
+
+  background:
+    #ececef;
 
 }
 
@@ -783,17 +935,36 @@ button {
     var(--blue);
 
   color:
-    white;
+    #fff;
 
   font-size:
-    20px;
+    19px;
 
+  flex:
+    0 0 auto;
 }
 
 
 .send:active {
 
   transform:
-    scale(.94);
+    scale(
+      .94
+    );
+
+}
+
+
+@media (min-width:700px) {
+
+  :root {
+
+    --effect-size:
+      min(
+        100%,
+        430px
+      );
+
+  }
 
 }
