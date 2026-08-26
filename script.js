@@ -4,7 +4,9 @@
 
 
   /*
-   * 三个独立蜘蛛侠动作
+   * ==========================================
+   * 三个已经切好的独立视频
+   * ==========================================
    */
 
   const CLIPS = [
@@ -18,9 +20,57 @@
   ];
 
 
-  const input =
+  /*
+   * Canvas 实际处理分辨率
+   *
+   * 不需要用 512 × 512 原尺寸逐帧抠像，
+   * 256 × 256 对手机端已经足够。
+   */
+
+  const PROCESS_SIZE = 256;
+
+
+  /*
+   * 原素材浅灰背景的目标颜色。
+   *
+   * 你这份素材角落实际接近：
+   *
+   * RGB(238,238,238)
+   */
+
+  const BG = {
+
+    r: 238,
+
+    g: 238,
+
+    b: 238
+
+  };
+
+
+  /*
+   * 抠像参数
+   *
+   * threshold 越大：
+   * 去掉更多灰色。
+   *
+   * feather 越大：
+   * 边缘越柔和。
+   */
+
+  const KEY_THRESHOLD = 16;
+
+  const FEATHER = 10;
+
+
+  /*
+   * DOM
+   */
+
+  const app =
     document.getElementById(
-      "input"
+      "app"
     );
 
 
@@ -30,104 +80,288 @@
     );
 
 
+  const input =
+    document.getElementById(
+      "input"
+    );
+
+
   const messages =
     document.getElementById(
       "messages"
     );
 
 
-  const egg =
+  const layer =
     document.getElementById(
-      "egg"
+      "effectLayer"
     );
 
 
   const video =
     document.getElementById(
-      "effect"
+      "effectVideo"
     );
 
 
-  let currentClip =
-    -1;
+  const canvas =
+    document.getElementById(
+      "effectCanvas"
+    );
 
 
-  let session =
-    0;
+  const ctx =
+    canvas.getContext(
+      "2d",
+      {
+        alpha:
+          true,
+
+        willReadFrequently:
+          true
+
+      }
+    );
 
 
-  let hideTimer =
-    0;
+  /*
+   * ==========================================
+   * 运行状态
+   * ==========================================
+   */
+
+  const state = {
+
+    session:
+      0,
+
+    currentClip:
+      -1,
+
+    raf:
+      0,
+
+    frameCallbackId:
+      0,
+
+    keyboardTimer:
+      0,
+
+    cleanupTimer:
+      0,
+
+    /*
+     * 键盘弹起前的页面基准高度。
+     *
+     * 键盘出现以后不再改变。
+     */
+
+    layoutHeight:
+      window.innerHeight ||
+      document.documentElement.clientHeight,
+
+    keyboardHeight:
+      0,
+
+    running:
+      false
+
+  };
 
 
-  /* ======================================
-     iPhone / 微信视口
-  ====================================== */
+  /*
+   * ==========================================
+   * CSS 变量
+   * ==========================================
+   */
 
-  function syncHeight() {
-
-    const height =
-      Math.round(
-
-        window.visualViewport?.height ||
-
-        window.innerHeight
-
-      );
-
+  function setVar(
+    name,
+    value
+  ) {
 
     document.documentElement
       .style
       .setProperty(
-
-        "--h",
-
-        height + "px"
-
+        name,
+        value
       );
 
   }
 
 
-  syncHeight();
+  /*
+   * ==========================================
+   * 键盘 + VisualViewport
+   *
+   * 核心：
+   *
+   * 键盘出现：
+   *   app 高度锁定
+   *   顶部不动
+   *   只有 composer 往上走
+   * ==========================================
+   */
 
-
-  window.addEventListener(
-    "resize",
-    syncHeight,
-    {
-      passive:
-        true
-    }
-  );
-
-
-  if (
-    window.visualViewport
+  function syncViewport(
+    forceLayout = false
   ) {
 
-    window.visualViewport
-      .addEventListener(
+    const vv =
+      window.visualViewport;
 
-        "resize",
 
-        syncHeight,
+    const innerHeight =
+      window.innerHeight ||
+      document.documentElement
+        .clientHeight ||
+      0;
 
-        {
-          passive:
-            true
-        }
+
+    const visualHeight =
+      vv?.height ??
+      innerHeight;
+
+
+    const offsetTop =
+      vv?.offsetTop ??
+      0;
+
+
+    const keyboardHeight =
+      Math.max(
+
+        0,
+
+        innerHeight -
+        visualHeight -
+        offsetTop
+
+      );
+
+
+    const keyboardOpen =
+      keyboardHeight >
+      100;
+
+
+    /*
+     * 键盘打开时：
+     *
+     * 不再重新设置 app 高度。
+     *
+     * 所以顶部不会被挤。
+     */
+
+    if (
+      forceLayout ||
+      !keyboardOpen
+    ) {
+
+      state.layoutHeight =
+        innerHeight;
+
+
+      setVar(
+
+        "--app-height",
+
+        `${innerHeight}px`
+
+      );
+
+    }
+
+
+    state.keyboardHeight =
+      keyboardHeight;
+
+
+    setVar(
+
+      "--keyboard-height",
+
+      `${keyboardHeight}px`
+
+    );
+
+  }
+
+
+  /*
+   * 防止键盘动画期间疯狂触发重排。
+   */
+
+  function queueViewportSync() {
+
+    clearTimeout(
+      state.keyboardTimer
+    );
+
+
+    state.keyboardTimer =
+      setTimeout(
+
+        () => {
+
+          syncViewport(
+            false
+          );
+
+        },
+
+        20
 
       );
 
   }
 
 
-  /* ======================================
-     添加 MJ 气泡
-  ====================================== */
+  /*
+   * ==========================================
+   * 聊天自动滚到最新
+   * ==========================================
+   */
 
-  function addMJ(text) {
+  function scrollToLatest() {
+
+    requestAnimationFrame(
+
+      () => {
+
+        messages.scrollTop =
+          messages.scrollHeight;
+
+
+        setTimeout(
+
+          () => {
+
+            messages.scrollTop =
+              messages.scrollHeight;
+
+          },
+
+          40
+
+        );
+
+      }
+
+    );
+
+  }
+
+
+  /*
+   * ==========================================
+   * 添加 MJ 气泡
+   * ==========================================
+   */
+
+  function addMessage(
+    text
+  ) {
 
     const row =
       document.createElement(
@@ -163,32 +397,20 @@
     );
 
 
-    requestAnimationFrame(
-      () => {
-
-        messages.scrollTop =
-          messages.scrollHeight;
-
-      }
-    );
+    scrollToLatest();
 
   }
 
 
-  /* ======================================
-     随机选择特效
-  ====================================== */
+  /*
+   * ==========================================
+   * 随机动作
+   *
+   * 连续两次不选同一个
+   * ==========================================
+   */
 
   function chooseClip() {
-
-    if (
-      CLIPS.length === 1
-    ) {
-
-      return 0;
-
-    }
-
 
     let index =
       Math.floor(
@@ -199,13 +421,13 @@
       );
 
 
-    /*
-     * 连续两次不要相同
-     */
-
     if (
+
+      CLIPS.length > 1 &&
+
       index ===
-      currentClip
+      state.currentClip
+
     ) {
 
       index =
@@ -217,7 +439,7 @@
     }
 
 
-    currentClip =
+    state.currentClip =
       index;
 
 
@@ -226,24 +448,527 @@
   }
 
 
-  /* ======================================
-     停止当前特效
-  ====================================== */
+  /*
+   * ==========================================
+   * Canvas 初始化
+   * ==========================================
+   */
 
-  function stopEffect() {
+  function resizeProcessingCanvas() {
 
-    egg.classList.remove(
-      "show",
+    canvas.width =
+      PROCESS_SIZE;
+
+    canvas.height =
+      PROCESS_SIZE;
+
+
+    ctx.clearRect(
+
+      0,
+      0,
+      PROCESS_SIZE,
+      PROCESS_SIZE
+
+    );
+
+  }
+
+
+  /*
+   * ==========================================
+   * 计算一个像素与背景颜色的距离
+   * ==========================================
+   */
+
+  function distanceToBackground(
+    r,
+    g,
+    b
+  ) {
+
+    const dr =
+      r -
+      BG.r;
+
+
+    const dg =
+      g -
+      BG.g;
+
+
+    const db =
+      b -
+      BG.b;
+
+
+    return Math.sqrt(
+
+      dr * dr +
+      dg * dg +
+      db * db
+
+    );
+
+  }
+
+
+  /*
+   * ==========================================
+   * 实时背景抠像
+   *
+   * 这里是解决灰色方框的核心。
+   * ==========================================
+   */
+
+  function drawKeyedFrame() {
+
+    if (
+      video.readyState <
+      HTMLMediaElement
+        .HAVE_CURRENT_DATA
+    ) {
+
+      return;
+
+    }
+
+
+    /*
+     * 清空上一帧
+     */
+
+    ctx.clearRect(
+
+      0,
+      0,
+      PROCESS_SIZE,
+      PROCESS_SIZE
+
+    );
+
+
+    /*
+     * 原视频缩小到 256 × 256
+     */
+
+    ctx.drawImage(
+
+      video,
+
+      0,
+      0,
+
+      PROCESS_SIZE,
+      PROCESS_SIZE
+
+    );
+
+
+    const frame =
+      ctx.getImageData(
+
+        0,
+        0,
+
+        PROCESS_SIZE,
+        PROCESS_SIZE
+
+      );
+
+
+    const pixels =
+      frame.data;
+
+
+    /*
+     * 每 4 个数字：
+     *
+     * R G B A
+     */
+
+    for (
+      let i = 0;
+      i < pixels.length;
+      i += 4
+    ) {
+
+      const distance =
+        distanceToBackground(
+
+          pixels[i],
+          pixels[i + 1],
+          pixels[i + 2]
+
+        );
+
+
+      /*
+       * 完全属于背景：
+       * 直接变透明
+       */
+
+      if (
+        distance <=
+        KEY_THRESHOLD
+      ) {
+
+        pixels[i + 3] =
+          0;
+
+      }
+
+
+      /*
+       * 接近背景：
+       * 做柔和过渡
+       *
+       * 避免人物边缘出现锯齿
+       */
+
+      else if (
+
+        distance <
+        KEY_THRESHOLD +
+        FEATHER
+
+      ) {
+
+        pixels[i + 3] =
+          Math.round(
+
+            (
+              (
+                distance -
+                KEY_THRESHOLD
+              ) /
+              FEATHER
+            ) *
+            255
+
+          );
+
+      }
+
+
+      /*
+       * 前景：
+       * 完全保留
+       */
+
+    }
+
+
+    ctx.putImageData(
+
+      frame,
+
+      0,
+      0
+
+    );
+
+  }
+
+
+  /*
+   * ==========================================
+   * 清理特效
+   * ==========================================
+   */
+
+  function finishEffect(
+    session
+  ) {
+
+    if (
+      session !==
+      state.session
+    ) {
+
+      return;
+
+    }
+
+
+    state.running =
+      false;
+
+
+    layer.classList.add(
       "hide"
+    );
+
+
+    clearTimeout(
+      state.cleanupTimer
+    );
+
+
+    state.cleanupTimer =
+      setTimeout(
+
+        () => {
+
+          if (
+            session !==
+            state.session
+          ) {
+
+            return;
+
+          }
+
+
+          layer.classList.remove(
+            "show",
+            "hide"
+          );
+
+
+          cancelAnimationFrame(
+            state.raf
+          );
+
+
+          try {
+
+            if (
+
+              state.frameCallbackId &&
+
+              video.cancelVideoFrameCallback
+
+            ) {
+
+              video.cancelVideoFrameCallback(
+
+                state.frameCallbackId
+
+              );
+
+            }
+
+          }
+          catch (_) {}
+
+
+          video.pause();
+
+
+          video.removeAttribute(
+            "src"
+          );
+
+
+          video.load();
+
+
+          ctx.clearRect(
+
+            0,
+            0,
+
+            PROCESS_SIZE,
+            PROCESS_SIZE
+
+          );
+
+        },
+
+        80
+
+      );
+
+  }
+
+
+  /*
+   * ==========================================
+   * 普通 requestAnimationFrame
+   * ==========================================
+   */
+
+  function frameLoop(
+    session
+  ) {
+
+    if (
+
+      session !==
+      state.session ||
+
+      !state.running
+
+    ) {
+
+      return;
+
+    }
+
+
+    drawKeyedFrame();
+
+
+    if (
+      video.ended
+    ) {
+
+      finishEffect(
+        session
+      );
+
+
+      return;
+
+    }
+
+
+    state.raf =
+      requestAnimationFrame(
+
+        () => {
+
+          frameLoop(
+            session
+          );
+
+        }
+
+      );
+
+  }
+
+
+  /*
+   * ==========================================
+   * 优先使用 requestVideoFrameCallback
+   * ==========================================
+   */
+
+  function startVideoFrameLoop(
+    session
+  ) {
+
+    if (
+
+      typeof
+      video.requestVideoFrameCallback ===
+      "function"
+
+    ) {
+
+      const draw =
+        () => {
+
+          if (
+
+            session !==
+            state.session ||
+
+            !state.running
+
+          ) {
+
+            return;
+
+          }
+
+
+          drawKeyedFrame();
+
+
+          if (
+            video.ended
+          ) {
+
+            finishEffect(
+              session
+            );
+
+
+            return;
+
+          }
+
+
+          state.frameCallbackId =
+
+            video.requestVideoFrameCallback(
+              draw
+            );
+
+        };
+
+
+      state.frameCallbackId =
+
+        video.requestVideoFrameCallback(
+          draw
+        );
+
+    }
+
+    else {
+
+      frameLoop(
+        session
+      );
+
+    }
+
+  }
+
+
+  /*
+   * ==========================================
+   * 播放一个随机彩蛋
+   * ==========================================
+   */
+
+  async function playEffect() {
+
+    const session =
+      ++state.session;
+
+
+    clearTimeout(
+      state.cleanupTimer
+    );
+
+
+    cancelAnimationFrame(
+      state.raf
     );
 
 
     try {
 
-      video.pause();
+      if (
+
+        state.frameCallbackId &&
+
+        video.cancelVideoFrameCallback
+
+      ) {
+
+        video.cancelVideoFrameCallback(
+
+          state.frameCallbackId
+
+        );
+
+      }
 
     }
     catch (_) {}
+
+
+    state.running =
+      false;
+
+
+    video.pause();
 
 
     video.removeAttribute(
@@ -253,52 +978,30 @@
 
     video.load();
 
-  }
+
+    resizeProcessingCanvas();
 
 
-  /* ======================================
-     播放 MJ 特效
-  ====================================== */
-
-  function playEffect() {
-
-    const mySession =
-      ++session;
-
-
-    clearTimeout(
-      hideTimer
-    );
-
-
-    stopEffect();
-
-
-    const clip =
+    const src =
       CLIPS[
         chooseClip()
       ];
 
 
     video.src =
-      clip;
+      src;
+
+
+    video.playsInline =
+      true;
 
 
     /*
-     * 用户点击发送本身就是用户手势。
+     * 默认先尝试带声音。
      *
-     * 因此直接 play。
-     *
-     * 不等待 loadedmetadata。
-     * 不等待 seeked。
-     * 不做 currentTime 跳转。
-     *
-     * 这是移动端最稳定的方式。
+     * 用户刚刚点了发送按钮，
+     * 仍处于用户手势调用链。
      */
-
-    video.currentTime =
-      0;
-
 
     video.muted =
       false;
@@ -308,133 +1011,85 @@
       false;
 
 
-    video.playsInline =
-      true;
+    layer.classList.remove(
+      "hide"
+    );
 
 
-    egg.classList.add(
+    layer.classList.add(
       "show"
     );
 
 
-    const playPromise =
-      video.play();
+    state.running =
+      true;
 
 
-    if (
-      playPromise &&
-      typeof playPromise.catch ===
-        "function"
-    ) {
+    try {
 
-      playPromise.catch(
-        () => {
+      await video.play();
 
-          /*
-           * 某些 iOS / 微信 WebView
-           * 会因为音频策略拒绝。
-           *
-           * 静音重新播放。
-           *
-           * 视觉特效依然保留。
-           */
+    }
 
-          video.muted =
-            true;
+    catch (_) {
 
-          video.defaultMuted =
-            true;
+      /*
+       * 如果 iOS / WebView
+       * 不允许带声音：
+       *
+       * 自动静音再播放。
+       */
+
+      video.muted =
+        true;
 
 
-          const retry =
-            video.play();
+      video.defaultMuted =
+        true;
 
 
-          retry?.catch?.(
-            () => {}
-          );
+      try {
 
-        }
-      );
+        await video.play();
+
+      }
+
+      catch (_) {
+
+        finishEffect(
+          session
+        );
+
+
+        return;
+
+      }
 
     }
 
 
-    /* ==================================
-       正常结束
-    ================================== */
+    if (
+      session !==
+      state.session
+    ) {
 
-    video.onended =
-      () => {
+      return;
 
-        if (
-          mySession !==
-          session
-        ) {
-
-          return;
-
-        }
+    }
 
 
-        egg.classList.add(
-          "hide"
-        );
-
-
-        hideTimer =
-          setTimeout(
-
-            stopEffect,
-
-            80
-
-          );
-
-      };
-
-
-    /* ==================================
-       某些 WebView ended 不可靠
-    ================================== */
-
-    video.ontimeupdate =
-      () => {
-
-        if (
-          mySession !==
-          session
-        ) {
-
-          return;
-
-        }
-
-
-        if (
-
-          video.duration &&
-
-          video.currentTime >=
-            video.duration -
-            0.06
-
-        ) {
-
-          egg.classList.add(
-            "hide"
-          );
-
-        }
-
-      };
+    startVideoFrameLoop(
+      session
+    );
 
   }
 
 
-  /* ======================================
-     发送
-  ====================================== */
+  /*
+   * ==========================================
+   * 发送 MJ
+   * ==========================================
+   */
 
   composer.addEventListener(
 
@@ -449,19 +1104,8 @@
         input.value.trim();
 
 
-      if (
-        !text
-      ) {
-
-        return;
-
-      }
-
-
       /*
-       * 这个版本不需要真正聊天。
-       *
-       * 只接受 MJ。
+       * 只接受 MJ
        */
 
       if (
@@ -470,34 +1114,31 @@
         )
       ) {
 
-        input.select();
-
         return;
 
       }
 
 
       /*
-       * 最重要：
-       *
        * 先显示消息。
+       *
+       * 这点故意放在播放前。
+       *
+       * 即使视频失败，
+       * MJ 也不会消失。
        */
 
-      addMJ(
+      addMessage(
         "MJ"
       );
 
-
-      /*
-       * 再清空。
-       */
 
       input.value =
         "";
 
 
       /*
-       * 播放彩蛋。
+       * 再触发彩蛋。
        */
 
       playEffect();
@@ -506,5 +1147,173 @@
 
   );
 
+
+  /*
+   * ==========================================
+   * 键盘
+   * ==========================================
+   */
+
+  input.addEventListener(
+
+    "focus",
+
+    () => {
+
+      queueViewportSync();
+
+    },
+
+    {
+      passive:
+        true
+
+    }
+
+  );
+
+
+  input.addEventListener(
+
+    "blur",
+
+    () => {
+
+      setTimeout(
+
+        () => {
+
+          syncViewport(
+            false
+          );
+
+        },
+
+        80
+
+      );
+
+    },
+
+    {
+      passive:
+        true
+
+    }
+
+  );
+
+
+  /*
+   * 普通 resize
+   */
+
+  window.addEventListener(
+
+    "resize",
+
+    () => {
+
+      syncViewport(
+        false
+      );
+
+    },
+
+    {
+      passive:
+        true
+
+    }
+
+  );
+
+
+  /*
+   * VisualViewport
+   */
+
+  if (
+    window.visualViewport
+  ) {
+
+    window.visualViewport.addEventListener(
+
+      "resize",
+
+      queueViewportSync,
+
+      {
+        passive:
+          true
+      }
+
+    );
+
+
+    window.visualViewport.addEventListener(
+
+      "scroll",
+
+      queueViewportSync,
+
+      {
+        passive:
+          true
+      }
+
+    );
+
+  }
+
+
+  /*
+   * 横竖屏旋转：
+   *
+   * 这时候允许重新设置基准高度。
+   */
+
+  window.addEventListener(
+
+    "orientationchange",
+
+    () => {
+
+      setTimeout(
+
+        () => {
+
+          syncViewport(
+            true
+          );
+
+        },
+
+        180
+
+      );
+
+    },
+
+    {
+      passive:
+        true
+    }
+
+  );
+
+
+  /*
+   * ==========================================
+   * 初始化
+   * ==========================================
+   */
+
+  resizeProcessingCanvas();
+
+
+  syncViewport(
+    true
+  );
 
 })();
