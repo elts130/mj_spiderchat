@@ -1,8 +1,6 @@
 <!doctype html>
 <html lang="zh-CN">
-
 <head>
-
   <meta charset="utf-8">
 
   <meta
@@ -12,73 +10,63 @@
 
   <meta
     name="theme-color"
-    content="#ffffff"
+    content="#f7f7f8"
   >
 
-  <title>MJ · 私信彩蛋</title>
-
-  <link
-    rel="stylesheet"
-    href="style.css"
+  <meta
+    name="apple-mobile-web-app-capable"
+    content="yes"
   >
 
+  <title>MJ 私信彩蛋</title>
+
+  <link rel="stylesheet" href="style.css">
 </head>
-
 
 <body>
 
-<div
-  class="app"
-  id="app"
->
-
-
-  <!-- 顶部私信栏 -->
+<div class="app" id="app">
 
   <header class="topbar">
 
     <button
-      class="back"
+      class="icon-btn back"
       type="button"
+      aria-label="返回"
     >
       ‹
     </button>
 
-
-    <div class="person">
+    <div
+      class="person"
+      aria-label="MJ"
+    >
 
       <div class="avatar">
         M
       </div>
 
+      <div class="person-copy">
+        <strong>MJ</strong>
 
-      <div class="person-info">
-
-        <div class="name">
-          MJ
-        </div>
-
-        <div class="status">
+        <span>
           <i></i>
           在线
-        </div>
-
+        </span>
       </div>
 
     </div>
 
-
     <button
-      class="more"
+      class="icon-btn more"
       type="button"
+      aria-label="更多"
     >
       •••
     </button>
 
   </header>
 
-
-  <!-- 私信区域 -->
 
   <main
     class="chat"
@@ -90,10 +78,9 @@
       id="messages"
     >
 
-      <div class="date">
+      <div class="date-chip">
         今天
       </div>
-
 
       <div class="hint">
         发送 <b>MJ</b> 试试
@@ -103,38 +90,36 @@
 
 
     <!--
+      特效独立层：
 
-      蜘蛛侠彩蛋
-
-      不属于聊天内容。
-
-      不参与页面布局。
-
-      只是覆盖在聊天区域上面。
-
+      不参与聊天布局
+      不占聊天空间
+      不会推开消息
     -->
 
     <div
-      class="egg"
-      id="egg"
+      class="effect-layer"
+      id="effectLayer"
       aria-hidden="true"
     >
 
+      <canvas
+        id="effectCanvas"
+      ></canvas>
+
       <video
-        id="effect"
-        class="effect"
+        id="effectVideo"
         playsinline
         webkit-playsinline
         preload="auto"
-        disablepictureinpicture
+        muted
+        aria-hidden="true"
       ></video>
 
     </div>
 
   </main>
 
-
-  <!-- 输入区域 -->
 
   <form
     class="composer"
@@ -145,10 +130,10 @@
     <button
       class="plus"
       type="button"
+      aria-label="更多"
     >
       ＋
     </button>
-
 
     <input
       id="input"
@@ -156,15 +141,16 @@
       maxlength="30"
       autocomplete="off"
       autocorrect="off"
+      autocapitalize="off"
       spellcheck="false"
       enterkeyhint="send"
       placeholder="发消息…"
     >
 
-
     <button
       class="send"
       type="submit"
+      aria-label="发送"
     >
       ↑
     </button>
@@ -178,7 +164,6 @@
   src="script.js"
   defer
 ></script>
-
 
 </body>
 </html>
